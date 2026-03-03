@@ -7,7 +7,6 @@ const activities = [
     title: "Deployed creor-web to production",
     detail: "v0.1.0 — 3 files changed",
     time: "2 min ago",
-    color: "text-green-500",
   },
   {
     type: "ai",
@@ -15,7 +14,6 @@ const activities = [
     title: "AI session completed on auth-service",
     detail: "Generated JWT middleware — 4 files created",
     time: "15 min ago",
-    color: "text-accent",
   },
   {
     type: "commit",
@@ -23,7 +21,6 @@ const activities = [
     title: "Pushed 3 commits to creor-desktop",
     detail: "feature/ai-panel — Fix inline completions",
     time: "1 hour ago",
-    color: "text-blue-500",
   },
   {
     type: "pr",
@@ -31,7 +28,6 @@ const activities = [
     title: "PR #42 merged in opencode-engine",
     detail: "Add Google Vertex AI provider support",
     time: "3 hours ago",
-    color: "text-purple-500",
   },
   {
     type: "ai",
@@ -39,7 +35,6 @@ const activities = [
     title: "AI code review on api-gateway",
     detail: "Reviewed 12 files — 3 suggestions",
     time: "5 hours ago",
-    color: "text-accent",
   },
   {
     type: "deploy",
@@ -47,7 +42,6 @@ const activities = [
     title: "Deployed creor-docs to preview",
     detail: "Added quickstart guide",
     time: "8 hours ago",
-    color: "text-green-500",
   },
   {
     type: "commit",
@@ -55,7 +49,6 @@ const activities = [
     title: "Pushed 7 commits to opencode-engine",
     detail: "main — RAG pipeline improvements",
     time: "1 day ago",
-    color: "text-blue-500",
   },
   {
     type: "pr",
@@ -63,7 +56,6 @@ const activities = [
     title: "PR #38 opened in creor-desktop",
     detail: "Implement multi-tab terminal support",
     time: "1 day ago",
-    color: "text-purple-500",
   },
 ];
 
@@ -86,7 +78,7 @@ export default function ActivityPage() {
           {activities.map((item, i) => (
             <div key={i} className="flex items-start gap-4 px-5 py-4">
               <div
-                className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted ${item.color}`}
+                className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground"
               >
                 <item.icon className="h-4 w-4" />
               </div>

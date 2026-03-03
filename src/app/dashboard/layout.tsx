@@ -9,7 +9,6 @@ import {
   Activity,
   FolderOpen,
   Users,
-  Code2,
   ChevronLeft,
 } from "lucide-react";
 
@@ -30,16 +29,27 @@ export default function DashboardLayout({
 
   return (
     <div className="flex h-screen bg-background">
-      {/* Sidebar */}
-      <aside className="flex w-64 flex-col border-r border-sidebar-border bg-sidebar">
-        <div className="flex h-16 items-center gap-2 border-b border-sidebar-border px-6">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent">
-            <Code2 className="h-4 w-4 text-accent-foreground" />
-          </div>
-          <span className="text-lg font-semibold tracking-tight">Creor</span>
+      <aside className="flex w-56 flex-col border-r border-border bg-card">
+        <div className="flex h-14 items-center gap-2 border-b border-border px-4">
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <polyline points="16 18 22 12 16 6" />
+            <polyline points="8 6 2 12 8 18" />
+          </svg>
+          <span className="text-[13px] font-semibold tracking-[-0.02em]">
+            Creor
+          </span>
         </div>
 
-        <nav className="flex-1 space-y-1 px-3 py-4">
+        <nav className="flex-1 space-y-0.5 px-2 py-3">
           {sidebarItems.map((item) => {
             const isActive =
               pathname === item.href ||
@@ -49,26 +59,26 @@ export default function DashboardLayout({
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                  "flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] transition-colors",
                   isActive
-                    ? "bg-accent/10 text-accent"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    ? "bg-muted font-medium text-foreground"
+                    : "text-foreground-secondary hover:bg-muted hover:text-foreground"
                 )}
               >
-                <item.icon className="h-4 w-4" />
+                <item.icon className="h-3.5 w-3.5" />
                 {item.label}
               </Link>
             );
           })}
         </nav>
 
-        <div className="border-t border-sidebar-border p-3">
+        <div className="border-t border-border p-2">
           <Link
             href="/"
-            className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] text-foreground-secondary transition-colors hover:bg-muted hover:text-foreground"
           >
-            <ChevronLeft className="h-4 w-4" />
-            Back to Home
+            <ChevronLeft className="h-3.5 w-3.5" />
+            Home
           </Link>
         </div>
       </aside>

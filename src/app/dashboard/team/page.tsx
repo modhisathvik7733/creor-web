@@ -45,8 +45,8 @@ const pending = [
 
 function RoleBadge({ role }: { role: string }) {
   const styles: Record<string, string> = {
-    Owner: "bg-amber-500/10 text-amber-500",
-    Admin: "bg-blue-500/10 text-blue-500",
+    Owner: "bg-accent/10 text-foreground",
+    Admin: "bg-accent/10 text-foreground",
     Developer: "bg-muted text-muted-foreground",
   };
 
@@ -93,14 +93,14 @@ export default function TeamPage() {
             >
               <div className="flex items-center gap-3">
                 <div className="relative">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-accent/10 text-xs font-semibold text-accent">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-xs font-semibold text-foreground">
                     {member.avatar}
                   </div>
                   <div
                     className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-card ${
                       member.status === "online"
-                        ? "bg-green-500"
-                        : "bg-muted-foreground/50"
+                        ? "bg-foreground"
+                        : "bg-muted-foreground/30"
                     }`}
                   />
                 </div>

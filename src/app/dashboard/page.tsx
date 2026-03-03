@@ -73,8 +73,8 @@ export default function DashboardOverview() {
     <div className="p-8">
       <div className="mb-8">
         <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-        <p className="mt-1 text-muted-foreground">
-          Overview of your Creor workspace
+        <p className="mt-1 text-[13px] text-muted-foreground">
+          Stop writing code. Start creating it.
         </p>
       </div>
 
@@ -109,10 +109,10 @@ export default function DashboardOverview() {
               <div key={i} className="flex items-center justify-between px-5 py-3">
                 <div className="flex items-center gap-3">
                   <div
-                    className={`h-2 w-2 rounded-full ${
+                    className={`h-1.5 w-1.5 rounded-full ${
                       item.status === "success"
-                        ? "bg-green-500"
-                        : "bg-red-500"
+                        ? "bg-foreground"
+                        : "bg-muted-foreground"
                     }`}
                   />
                   <div>

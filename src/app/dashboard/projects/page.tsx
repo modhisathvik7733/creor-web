@@ -70,11 +70,11 @@ export default function ProjectsPage() {
         {projects.map((project) => (
           <div
             key={project.name}
-            className="group rounded-xl border border-border bg-card p-5 transition-colors hover:border-accent/50"
+            className="group rounded-xl border border-border bg-card p-5 transition-colors hover:border-foreground/20"
           >
             <div className="mb-3 flex items-start justify-between">
               <div className="flex items-center gap-2">
-                <FolderOpen className="h-4 w-4 text-accent" />
+                <FolderOpen className="h-4 w-4 text-foreground" />
                 <h3 className="font-semibold">{project.name}</h3>
               </div>
               <button className="rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-muted group-hover:opacity-100">
@@ -96,7 +96,7 @@ export default function ProjectsPage() {
               <span
                 className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
                   project.status === "active"
-                    ? "bg-green-500/10 text-green-500"
+                    ? "bg-accent/10 text-foreground"
                     : "bg-muted text-muted-foreground"
                 }`}
               >

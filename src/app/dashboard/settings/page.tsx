@@ -87,9 +87,9 @@ export default function SettingsPage() {
         </div>
 
         {/* Danger Zone */}
-        <div className="rounded-xl border border-red-500/30 bg-card">
-          <div className="border-b border-red-500/30 px-5 py-4">
-            <h2 className="font-semibold text-red-500">Danger Zone</h2>
+        <div className="rounded-xl border border-foreground/20 bg-card">
+          <div className="border-b border-foreground/20 px-5 py-4">
+            <h2 className="font-semibold">Danger Zone</h2>
           </div>
           <div className="p-5">
             <div className="flex items-center justify-between">
@@ -99,7 +99,7 @@ export default function SettingsPage() {
                   Permanently delete this workspace and all its data
                 </p>
               </div>
-              <button className="rounded-lg border border-red-500/30 px-4 py-2 text-sm font-medium text-red-500 transition-colors hover:bg-red-500/10">
+              <button className="rounded-lg border border-foreground/20 px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted">
                 Delete
               </button>
             </div>
