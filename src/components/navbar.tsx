@@ -15,7 +15,7 @@ import {
   BookOpen,
   Newspaper,
   FileText,
-  Github,
+  ArrowRight,
 } from "lucide-react";
 
 interface DropdownItem {
@@ -109,25 +109,30 @@ function Dropdown({
 
   return (
     <div className="absolute left-1/2 top-full pt-2 -translate-x-1/2">
-      <div className="animate-dropdown w-[300px] rounded-lg border border-border bg-background/95 p-1.5 shadow-[0_8px_40px_rgba(0,0,0,0.06)] backdrop-blur-xl dark:shadow-[0_8px_40px_rgba(0,0,0,0.5)]">
-        {items.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            onClick={onClose}
-            className="group flex items-start gap-3 rounded-md px-3 py-2.5 transition-colors hover:bg-muted"
-          >
-            <item.icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-foreground" />
-            <div className="min-w-0">
-              <p className="text-[13px] font-medium text-foreground">
-                {item.label}
-              </p>
-              <p className="text-[11px] leading-snug text-muted-foreground">
-                {item.description}
-              </p>
-            </div>
-          </Link>
-        ))}
+      <div className="animate-dropdown w-[320px] overflow-hidden rounded-xl border border-border bg-background/95 shadow-[0_12px_48px_rgba(0,0,0,0.08)] backdrop-blur-xl dark:shadow-[0_12px_48px_rgba(0,0,0,0.6)]">
+        <div className="h-px bg-gradient-to-r from-transparent via-foreground/10 to-transparent" />
+        <div className="p-2">
+          {items.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              onClick={onClose}
+              className="group flex items-start gap-3 rounded-lg px-3 py-3 transition-colors hover:bg-muted"
+            >
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted transition-colors group-hover:bg-foreground">
+                <item.icon className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-background" />
+              </div>
+              <div className="min-w-0 pt-0.5">
+                <p className="text-[13px] font-medium text-foreground">
+                  {item.label}
+                </p>
+                <p className="text-[11px] leading-snug text-muted-foreground">
+                  {item.description}
+                </p>
+              </div>
+            </Link>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -194,14 +199,14 @@ function MobileMenu({
           <Link
             href="/dashboard"
             onClick={onClose}
-            className="block w-full rounded-md bg-accent py-2.5 text-center text-[13px] font-medium text-accent-foreground"
+            className="block w-full rounded-full bg-foreground py-2.5 text-center text-[13px] font-medium text-background"
           >
             Download
           </Link>
           <Link
             href="/docs"
             onClick={onClose}
-            className="block w-full rounded-md border border-border py-2.5 text-center text-[13px] font-medium text-foreground"
+            className="block w-full rounded-full border border-border py-2.5 text-center text-[13px] font-medium text-foreground"
           >
             Documentation
           </Link>
@@ -265,103 +270,100 @@ export function Navbar() {
             : "border-b border-transparent bg-transparent"
         )}
       >
-        <div className="mx-auto flex h-14 max-w-[1080px] items-center justify-between px-6">
-          {/* Logo */}
-          <Link href="/" className="flex items-center gap-2">
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <polyline points="16 18 22 12 16 6" />
-              <polyline points="8 6 2 12 8 18" />
-            </svg>
-            <span className="text-[14px] font-semibold tracking-[-0.02em]">
-              Creor
-            </span>
-          </Link>
-
-          {/* Desktop Nav */}
-          <div className="hidden items-center gap-1 md:flex">
-            {navItems.map((item) => {
-              const hasDropdown = "items" in item && item.items;
-
-              if (hasDropdown) {
-                return (
-                  <div
-                    key={item.label}
-                    className="relative"
-                    onMouseEnter={() => handleEnter(item.label)}
-                    onMouseLeave={handleLeave}
-                  >
-                    <button
-                      onClick={() =>
-                        setOpenDropdown(
-                          openDropdown === item.label ? null : item.label
-                        )
-                      }
-                      className={cn(
-                        "flex items-center gap-1 rounded-md px-3 py-1.5 text-[13px] transition-colors text-foreground-secondary hover:text-foreground",
-                        openDropdown === item.label && "text-foreground"
-                      )}
-                    >
-                      {item.label}
-                      <ChevronDown
-                        className={cn(
-                          "h-3 w-3 transition-transform duration-200",
-                          openDropdown === item.label && "rotate-180"
-                        )}
-                      />
-                    </button>
-                    <Dropdown
-                      items={item.items!}
-                      isOpen={openDropdown === item.label}
-                      onClose={() => setOpenDropdown(null)}
-                    />
-                  </div>
-                );
-              }
-
-              return (
-                <Link
-                  key={item.label}
-                  href={item.href!}
-                  className="rounded-md px-3 py-1.5 text-[13px] text-foreground-secondary transition-colors hover:text-foreground"
+        <div className="h-px w-full bg-gradient-to-r from-transparent via-foreground/20 to-transparent" />
+        <div className="flex h-16 items-center justify-between px-8">
+          {/* Left: Logo + Nav */}
+          <div className="flex items-center gap-8">
+            <Link href="/" className="flex items-center gap-2.5 transition-opacity hover:opacity-70">
+              <div className="flex h-7 w-7 items-center justify-center rounded-[7px] bg-foreground">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="text-background"
                 >
-                  {item.label}
-                </Link>
-              );
-            })}
+                  <polyline points="16 18 22 12 16 6" />
+                  <polyline points="8 6 2 12 8 18" />
+                </svg>
+              </div>
+              <span className="text-[17px] font-semibold tracking-[-0.03em]">
+                Creor
+              </span>
+            </Link>
+
+            {/* Desktop Nav */}
+            <div className="hidden items-center gap-1 md:flex">
+              {navItems.map((item) => {
+                const hasDropdown = "items" in item && item.items;
+
+                if (hasDropdown) {
+                  return (
+                    <div
+                      key={item.label}
+                      className="relative"
+                      onMouseEnter={() => handleEnter(item.label)}
+                      onMouseLeave={handleLeave}
+                    >
+                      <button
+                        onClick={() =>
+                          setOpenDropdown(
+                            openDropdown === item.label ? null : item.label
+                          )
+                        }
+                        className={cn(
+                          "relative flex items-center gap-1.5 rounded-md px-3.5 py-2 text-[15px] text-foreground-secondary transition-colors hover:text-foreground after:absolute after:bottom-0.5 after:left-3.5 after:right-3.5 after:h-px after:bg-foreground after:opacity-0 after:transition-opacity hover:after:opacity-100",
+                          openDropdown === item.label && "text-foreground after:opacity-100"
+                        )}
+                      >
+                        {item.label}
+                        <ChevronDown
+                          className={cn(
+                            "h-4 w-4 transition-transform duration-200",
+                            openDropdown === item.label && "rotate-180"
+                          )}
+                        />
+                      </button>
+                      <Dropdown
+                        items={item.items!}
+                        isOpen={openDropdown === item.label}
+                        onClose={() => setOpenDropdown(null)}
+                      />
+                    </div>
+                  );
+                }
+
+                return (
+                  <Link
+                    key={item.label}
+                    href={item.href!}
+                    className="relative rounded-md px-3.5 py-2 text-[15px] text-foreground-secondary transition-colors hover:text-foreground after:absolute after:bottom-0.5 after:left-3.5 after:right-3.5 after:h-px after:bg-foreground after:opacity-0 after:transition-opacity hover:after:opacity-100"
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </div>
           </div>
 
           {/* Right */}
-          <div className="hidden items-center gap-2 md:flex">
-            <a
-              href="https://github.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-md p-2 text-foreground-secondary transition-colors hover:text-foreground"
-              aria-label="GitHub"
-            >
-              <Github className="h-4 w-4" />
-            </a>
-            <div className="mx-1 h-4 w-px bg-border" />
+          <div className="hidden items-center gap-4 md:flex">
             <Link
               href="/docs"
-              className="rounded-md px-3 py-1.5 text-[13px] text-foreground-secondary transition-colors hover:text-foreground"
+              className="rounded-md px-3 py-2 text-[15px] text-foreground-secondary transition-colors hover:text-foreground"
             >
               Docs
             </Link>
             <Link
               href="/dashboard"
-              className="rounded-md bg-accent px-4 py-1.5 text-[13px] font-medium text-accent-foreground transition-opacity hover:opacity-80"
+              className="group inline-flex items-center gap-2 rounded-full bg-foreground px-5 py-2 text-[15px] font-medium text-background transition-all hover:shadow-[0_0_20px_rgba(0,0,0,0.15)] dark:hover:shadow-[0_0_20px_rgba(255,255,255,0.1)]"
             >
               Download
+              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
             </Link>
           </div>
 
