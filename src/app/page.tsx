@@ -68,9 +68,6 @@ export default function Home() {
       <section className="px-6 pt-32 pb-20 sm:pt-40 sm:pb-28">
         <div className="mx-auto max-w-[1080px]">
           <div className="max-w-2xl">
-            <p className="mb-4 text-[13px] font-medium tracking-wide text-foreground-secondary">
-              Open Source AI Code Editor
-            </p>
             <h1 className="text-[clamp(2.5rem,6vw,4.5rem)] font-bold leading-[1.05] tracking-[-0.035em]">
               Stop writing code.
               <br />
