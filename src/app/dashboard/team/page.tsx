@@ -93,6 +93,7 @@ export default function TeamPage() {
               >
                 <div className="flex items-center gap-3">
                   {member.avatarUrl ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
                     <img
                       src={member.avatarUrl}
                       alt=""

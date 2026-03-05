@@ -104,6 +104,7 @@ export default function DashboardLayout({
         <div className="border-t border-border p-2 space-y-1">
           <div className="flex items-center gap-2.5 px-3 py-2">
             {user.avatarUrl ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
               <img
                 src={user.avatarUrl}
                 alt={user.name}

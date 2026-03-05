@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { api } from "@/lib/api";
 import { Suspense } from "react";
@@ -12,17 +12,15 @@ function CallbackContent() {
   const [error, setError] = useState<string | null>(null);
   const calledRef = useRef(false);
 
+  const code = useMemo(() => searchParams.get("code"), [searchParams]);
+  const provider = useMemo(() => searchParams.get("provider"), [searchParams]);
+
   useEffect(() => {
     if (calledRef.current) return;
+
+    if (!code || !provider) return;
+
     calledRef.current = true;
-
-    const code = searchParams.get("code");
-    const provider = searchParams.get("provider");
-
-    if (!code || !provider) {
-      setError("Missing authentication parameters");
-      return;
-    }
 
     (async () => {
       try {
@@ -50,7 +48,23 @@ function CallbackContent() {
         );
       }
     })();
-  }, [searchParams, login]);
+  }, [searchParams, login, code, provider]);
+
+  if (!code || !provider) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="text-center space-y-3">
+          <p className="text-sm text-red-500">Missing authentication parameters</p>
+          <a
+            href="/login"
+            className="text-sm text-foreground-secondary underline hover:text-foreground"
+          >
+            Try again
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   if (error) {
     return (
