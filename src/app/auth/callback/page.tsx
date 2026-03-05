@@ -26,7 +26,8 @@ function CallbackContent() {
       try {
         let result;
         if (provider === "github") {
-          result = await api.authGithub(code);
+          const redirectUri = `${window.location.origin}/auth/callback?provider=github`;
+          result = await api.authGithub(code, redirectUri);
         } else if (provider === "google") {
           const redirectUri = `${window.location.origin}/auth/callback?provider=google`;
           result = await api.authGoogle(code, redirectUri);

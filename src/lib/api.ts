@@ -78,10 +78,10 @@ class ApiClient {
 
   // ── Auth ──
 
-  async authGithub(code: string) {
+  async authGithub(code: string, redirectUri?: string) {
     return this.post<{ token: string; userId: string; workspaceId: string }>(
       "/api/auth/github/callback",
-      { code }
+      { code, ...(redirectUri && { redirect_uri: redirectUri }) }
     );
   }
 
