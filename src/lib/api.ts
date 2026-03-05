@@ -143,19 +143,33 @@ class ApiClient {
   }
 
   async addCredits(amount: number) {
-    return this.post<{ orderId: string; amount: number; currency: string }>(
-      "/api/billing/add-credits",
-      { amount }
+    return this.post<{
+      orderId: string;
+      amount: number;
+      amountPaise: number;
+      currency: string;
+      keyId: string;
+    }>("/api/billing/add-credits", { amount });
+  }
+
+  async verifyPayment(params: {
+    razorpay_order_id: string;
+    razorpay_payment_id: string;
+    razorpay_signature: string;
+  }) {
+    return this.post<{ success: boolean; paymentId: string }>(
+      "/api/billing/verify-payment",
+      params
     );
   }
 
-  async subscribe(plan: "starter" | "pro" | "team") {
+  async subscribe(plan: "starter" | "pro" | "team", callbackUrl?: string) {
     return this.post<{
       subscriptionId: string;
       shortUrl: string;
       plan: string;
       price: number;
-    }>("/api/billing/subscribe", { plan });
+    }>("/api/billing/subscribe", { plan, callbackUrl });
   }
 
   async getSubscription() {

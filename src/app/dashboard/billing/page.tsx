@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import {
   CreditCard,
@@ -8,6 +9,7 @@ import {
   IndianRupee,
   Zap,
   AlertCircle,
+  CheckCircle2,
 } from "lucide-react";
 
 interface BillingInfo {
@@ -62,16 +64,53 @@ const PLANS = [
   },
 ];
 
-function formatINR(paise: number): string {
-  return `₹${(paise / 100).toLocaleString("en-IN")}`;
+function formatINR(amount: number): string {
+  return `₹${amount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 export default function BillingPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const [billing, setBilling] = useState<BillingInfo | null>(null);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
   const [addingCredits, setAddingCredits] = useState(false);
   const [creditAmount, setCreditAmount] = useState(500);
+  const [paymentSuccess, setPaymentSuccess] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Load Razorpay checkout script
+  useEffect(() => {
+    if (document.querySelector('script[src*="razorpay"]')) return;
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.async = true;
+    document.body.appendChild(script);
+  }, []);
+
+  useEffect(() => {
+    if (searchParams.get("payment") === "success") {
+      setPaymentSuccess(true);
+      router.replace("/dashboard/billing", { scroll: false });
+      // Poll for subscription activation (webhook may take a few seconds)
+      let attempts = 0;
+      const poll = setInterval(async () => {
+        attempts++;
+        try {
+          const [b, s] = await Promise.all([
+            api.getBilling(),
+            api.getSubscription(),
+          ]);
+          setBilling(b);
+          setSubscription(s);
+          if (s.active || attempts >= 10) clearInterval(poll);
+        } catch {
+          clearInterval(poll);
+        }
+      }, 2000);
+      return () => clearInterval(poll);
+    }
+  }, [searchParams, router]);
 
   useEffect(() => {
     Promise.all([api.getBilling(), api.getSubscription()])
@@ -86,24 +125,57 @@ export default function BillingPage() {
   const handleAddCredits = async () => {
     setAddingCredits(true);
     try {
-      const order = await api.addCredits(creditAmount * 100);
-      // In production, this would open Razorpay checkout
-      alert(`Razorpay order created: ${order.orderId}. Amount: ₹${creditAmount}`);
+      const order = await api.addCredits(creditAmount);
+
+      const options = {
+        key: order.keyId,
+        amount: order.amountPaise,
+        currency: order.currency,
+        name: "Creor",
+        description: `Add ₹${creditAmount} credits`,
+        order_id: order.orderId,
+        handler: async (response: {
+          razorpay_order_id: string;
+          razorpay_payment_id: string;
+          razorpay_signature: string;
+        }) => {
+          try {
+            await api.verifyPayment(response);
+            setPaymentSuccess(true);
+            // Refresh billing data
+            const b = await api.getBilling();
+            setBilling(b);
+          } catch {
+            setError("Payment verification failed. Contact support if charged.");
+          }
+        },
+        modal: {
+          ondismiss: () => setAddingCredits(false),
+        },
+        theme: { color: "#171717" },
+      };
+
+      const rzp = new (window as any).Razorpay(options);
+      rzp.on("payment.failed", () => {
+        setError("Payment failed. Please try again.");
+        setAddingCredits(false);
+      });
+      rzp.open();
     } catch {
-      alert("Failed to create order");
-    } finally {
+      setError("Failed to create order");
       setAddingCredits(false);
     }
   };
 
   const handleSubscribe = async (plan: "starter" | "pro" | "team") => {
     try {
-      const result = await api.subscribe(plan);
+      const callbackUrl = `${window.location.origin}/dashboard/billing?payment=success`;
+      const result = await api.subscribe(plan, callbackUrl);
       if (result.shortUrl) {
         window.location.href = result.shortUrl;
       }
     } catch {
-      alert("Failed to create subscription");
+      setError("Failed to create subscription. Please try again.");
     }
   };
 
@@ -123,6 +195,39 @@ export default function BillingPage() {
           Manage your credits and subscription
         </p>
       </div>
+
+      {/* Payment Success Banner */}
+      {paymentSuccess && (
+        <div className="mb-6 flex items-center gap-3 rounded-xl border border-green-500/30 bg-green-500/10 p-4">
+          <CheckCircle2 className="h-5 w-5 shrink-0 text-green-500" />
+          <div>
+            <p className="font-medium text-green-500">Payment successful!</p>
+            <p className="text-sm text-green-500/80">
+              Your subscription is now active. It may take a moment to reflect below.
+            </p>
+          </div>
+          <button
+            onClick={() => setPaymentSuccess(false)}
+            className="ml-auto text-sm text-green-500/60 hover:text-green-500"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Error Banner */}
+      {error && (
+        <div className="mb-6 flex items-center gap-3 rounded-xl border border-red-500/30 bg-red-500/10 p-4">
+          <AlertCircle className="h-5 w-5 shrink-0 text-red-500" />
+          <p className="font-medium text-red-500">{error}</p>
+          <button
+            onClick={() => setError(null)}
+            className="ml-auto text-sm text-red-500/60 hover:text-red-500"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Balance & Usage */}
       <div className="mb-8 grid gap-4 sm:grid-cols-3">
