@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useEffect, useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { MessageSquare, User, Bot, ArrowLeft } from "lucide-react";
@@ -11,8 +11,9 @@ interface ShareMessage {
   content: string;
 }
 
-export default function SharePage() {
-  const { id } = useParams<{ id: string }>();
+function ShareContent() {
+  const searchParams = useSearchParams();
+  const id = searchParams.get("id");
   const [messages, setMessages] = useState<ShareMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +29,20 @@ export default function SharePage() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  if (loading) {
+  if (!id) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="text-center space-y-3">
+          <p className="text-sm text-foreground-secondary">No session ID provided</p>
+          <Link href="/" className="text-sm underline hover:text-foreground">
+            Go home
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading && id) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-foreground" />
@@ -41,10 +55,7 @@ export default function SharePage() {
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="text-center space-y-3">
           <p className="text-sm text-foreground-secondary">{error}</p>
-          <Link
-            href="/"
-            className="text-sm underline hover:text-foreground"
-          >
+          <Link href="/" className="text-sm underline hover:text-foreground">
             Go home
           </Link>
         </div>
@@ -54,13 +65,9 @@ export default function SharePage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b border-border bg-background/80 px-6 backdrop-blur-sm">
         <div className="flex items-center gap-3">
-          <Link
-            href="/"
-            className="rounded-lg p-1.5 transition-colors hover:bg-muted"
-          >
+          <Link href="/" className="rounded-lg p-1.5 transition-colors hover:bg-muted">
             <ArrowLeft className="h-4 w-4" />
           </Link>
           <div className="flex items-center gap-2">
@@ -76,14 +83,11 @@ export default function SharePage() {
         </Link>
       </header>
 
-      {/* Messages */}
       <div className="mx-auto max-w-3xl space-y-4 px-6 py-8">
         {messages.map((msg, i) => (
           <div
             key={i}
-            className={`flex gap-3 ${
-              msg.role === "user" ? "justify-end" : ""
-            }`}
+            className={`flex gap-3 ${msg.role === "user" ? "justify-end" : ""}`}
           >
             {msg.role === "assistant" && (
               <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-muted">
@@ -114,5 +118,19 @@ export default function SharePage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function SharePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-background">
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-foreground" />
+        </div>
+      }
+    >
+      <ShareContent />
+    </Suspense>
   );
 }
