@@ -1,6 +1,49 @@
-import { Save } from "lucide-react";
+"use client";
+
+import { useEffect, useState } from "react";
+import { api } from "@/lib/api";
+import { Save, Loader2 } from "lucide-react";
 
 export default function SettingsPage() {
+  const [name, setName] = useState("");
+  const [slug, setSlug] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    api
+      .getWorkspace()
+      .then((ws) => {
+        setName(ws.name);
+        setSlug(ws.slug);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setSaved(false);
+    try {
+      await api.patch("/api/workspaces/current", { name });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch {
+      alert("Failed to save settings");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-foreground" />
+      </div>
+    );
+  }
+
   return (
     <div className="p-8">
       <div className="mb-8">
@@ -23,7 +66,8 @@ export default function SettingsPage() {
               </label>
               <input
                 type="text"
-                defaultValue="Creor"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
                 className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none transition-colors focus:border-accent"
               />
             </div>
@@ -37,51 +81,14 @@ export default function SettingsPage() {
                 </span>
                 <input
                   type="text"
-                  defaultValue="workspace"
-                  className="flex-1 bg-transparent px-3 py-2 text-sm outline-none"
+                  value={slug}
+                  disabled
+                  className="flex-1 bg-transparent px-3 py-2 text-sm text-muted-foreground outline-none"
                 />
               </div>
-            </div>
-          </div>
-        </div>
-
-        {/* AI Configuration */}
-        <div className="rounded-xl border border-border bg-card">
-          <div className="border-b border-border px-5 py-4">
-            <h2 className="font-semibold">AI Configuration</h2>
-          </div>
-          <div className="space-y-5 p-5">
-            <div>
-              <label className="mb-1.5 block text-sm font-medium">
-                Default Provider
-              </label>
-              <select className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none transition-colors focus:border-accent">
-                <option>Anthropic (Claude)</option>
-                <option>OpenAI (GPT)</option>
-                <option>Google (Gemini)</option>
-                <option>Mistral</option>
-              </select>
-            </div>
-            <div>
-              <label className="mb-1.5 block text-sm font-medium">
-                Default Model
-              </label>
-              <select className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none transition-colors focus:border-accent">
-                <option>Claude Opus 4.6</option>
-                <option>Claude Sonnet 4.5</option>
-                <option>Claude Haiku 4.5</option>
-              </select>
-            </div>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium">Auto-approve safe tools</p>
-                <p className="text-xs text-muted-foreground">
-                  Automatically allow read-only tool executions
-                </p>
-              </div>
-              <button className="h-6 w-11 rounded-full bg-accent p-0.5 transition-colors">
-                <div className="h-5 w-5 translate-x-5 rounded-full bg-white transition-transform" />
-              </button>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Workspace URL cannot be changed
+              </p>
             </div>
           </div>
         </div>
@@ -106,10 +113,21 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        <div className="flex justify-end">
-          <button className="flex items-center gap-2 rounded-lg bg-accent px-6 py-2.5 text-sm font-medium text-accent-foreground transition-opacity hover:opacity-90">
-            <Save className="h-4 w-4" />
-            Save Changes
+        <div className="flex items-center justify-end gap-3">
+          {saved && (
+            <span className="text-sm text-muted-foreground">Saved!</span>
+          )}
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex items-center gap-2 rounded-lg bg-accent px-6 py-2.5 text-sm font-medium text-accent-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            {saving ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
+            {saving ? "Saving..." : "Save Changes"}
           </button>
         </div>
       </div>
