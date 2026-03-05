@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { toast } from "sonner";
 import { Key, Plus, Trash2, Copy, Check, AlertCircle } from "lucide-react";
 
 interface ApiKey {
@@ -42,7 +43,7 @@ export default function KeysPage() {
       setNewKeyName("");
       fetchKeys();
     } catch {
-      alert("Failed to create key");
+      toast.error("Failed to create key");
     } finally {
       setCreating(false);
     }
@@ -54,7 +55,7 @@ export default function KeysPage() {
       await api.deleteKey(id);
       setKeys((prev) => prev.filter((k) => k.id !== id));
     } catch {
-      alert("Failed to delete key");
+      toast.error("Failed to delete key");
     }
   };
 
