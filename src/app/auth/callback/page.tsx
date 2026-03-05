@@ -14,6 +14,10 @@ function CallbackContent() {
 
   const code = useMemo(() => searchParams.get("code"), [searchParams]);
   const provider = useMemo(() => searchParams.get("provider"), [searchParams]);
+  const stateRedirect = useMemo(() => {
+    const s = searchParams.get("state");
+    return s ? decodeURIComponent(s) : "/dashboard";
+  }, [searchParams]);
 
   useEffect(() => {
     if (calledRef.current) return;
@@ -37,11 +41,11 @@ function CallbackContent() {
         }
         await login(result.token);
         // Hard redirect to avoid race conditions with React re-renders
-        window.location.href = "/dashboard";
+        window.location.href = stateRedirect;
       } catch (err: unknown) {
         // If already logged in (token exists), just redirect
         if (typeof window !== "undefined" && localStorage.getItem("creor_token")) {
-          window.location.href = "/dashboard";
+          window.location.href = stateRedirect;
           return;
         }
         setError(

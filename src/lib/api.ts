@@ -247,6 +247,14 @@ class ApiClient {
     }>("/api/models");
   }
 
+  // ── Device Auth ──
+
+  async approveDevice(userCode: string) {
+    return this.post<{ success: boolean }>("/api/auth/device/approve", {
+      userCode,
+    });
+  }
+
   // ── Share ──
 
   async getShare(id: string) {
