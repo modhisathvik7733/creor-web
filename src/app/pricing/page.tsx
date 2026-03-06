@@ -1,5 +1,14 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { Check } from "lucide-react";
+import { generatePageMetadata } from "@/lib/metadata";
+
+export const metadata: Metadata = generatePageMetadata({
+  title: "Pricing",
+  description:
+    "Simple, transparent pricing for Creor. Use free with your own API keys or subscribe to Creor Gateway for one key, all models.",
+  path: "/pricing",
+});
 
 const PLANS = [
   {

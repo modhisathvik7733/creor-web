@@ -133,6 +133,8 @@ class ApiClient {
   async getBilling() {
     return this.get<{
       balance: number;
+      currency: string;
+      symbol: string;
       monthlyLimit: number | null;
       monthlyUsage: number;
       reloadEnabled: boolean;
@@ -142,12 +144,33 @@ class ApiClient {
     }>("/api/billing");
   }
 
+  async getQuota() {
+    return this.get<{
+      balance: number;
+      currency: string;
+      symbol: string;
+      plan: { id: string; name: string; price: number | null } | null;
+      monthly: {
+        current: number;
+        max: number | null;
+        remaining: number | null;
+        pct: number | null;
+        resetsAt: string;
+      };
+      canSend: boolean;
+      blockReason: string | null;
+      warnings: string[];
+      exchangeRates: Record<string, number>;
+    }>("/api/billing/quota");
+  }
+
   async addCredits(amount: number) {
     return this.post<{
       orderId: string;
       amount: number;
-      amountPaise: number;
+      amountSmallest: number;
       currency: string;
+      symbol: string;
       keyId: string;
     }>("/api/billing/add-credits", { amount });
   }
@@ -169,6 +192,7 @@ class ApiClient {
       shortUrl: string;
       plan: string;
       price: number;
+      currency: string;
     }>("/api/billing/subscribe", { plan, callbackUrl });
   }
 
@@ -176,8 +200,34 @@ class ApiClient {
     return this.get<{
       active: boolean;
       plan?: string;
+      planName?: string;
       price?: number;
+      currency?: string;
+      graceUntil?: string | null;
     }>("/api/billing/subscription");
+  }
+
+  async patchCurrency(currency: "USD" | "INR" | "EUR") {
+    return this.patch<{
+      success: boolean;
+      currency: string;
+      balance: number;
+    }>("/api/billing/currency", { currency });
+  }
+
+  async getPayments(page = 1, limit = 20) {
+    return this.get<{
+      payments: Array<{
+        id: string;
+        type: string;
+        amount: number;
+        currency: string;
+        status: string;
+        timeCreated: string;
+      }>;
+      page: number;
+      limit: number;
+    }>(`/api/billing/payments?page=${page}&limit=${limit}`);
   }
 
   // ── API Keys ──

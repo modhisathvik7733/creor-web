@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { AuthProvider } from "@/lib/auth";
 import { Toaster } from "sonner";
+import { generatePageMetadata } from "@/lib/metadata";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -14,12 +15,7 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "Creor — The AI-Native Code Editor",
-  description:
-    "Creor is an open-source, AI-native code editor with multi-provider LLM support, built-in agents, and a powerful terminal-first workflow.",
-  keywords: ["AI code editor", "open source IDE", "AI coding agent", "Creor"],
-};
+export const metadata: Metadata = generatePageMetadata();
 
 export default function RootLayout({
   children,
@@ -30,6 +26,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
         <meta name="darkreader-lock" />
+        <link rel="icon" href="/icon.svg" type="image/svg+xml" />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}

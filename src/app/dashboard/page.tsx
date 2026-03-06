@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import {
-  IndianRupee,
+  Wallet,
   Users,
   Zap,
   Key,
@@ -13,13 +13,20 @@ import Link from "next/link";
 
 interface DashboardStats {
   balance: number;
+  currency: string;
+  symbol: string;
   requests: number;
   members: number;
   keys: number;
+  plan: string | null;
+  monthlyPct: number | null;
 }
 
-function formatINR(paise: number): string {
-  return `₹${(paise / 100).toLocaleString("en-IN")}`;
+function formatAmount(amount: number, currency: string, symbol: string): string {
+  if (currency === "INR") {
+    return `${symbol}${amount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
+  return `${symbol}${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 export default function DashboardOverview() {
@@ -28,17 +35,21 @@ export default function DashboardOverview() {
 
   useEffect(() => {
     Promise.all([
-      api.getBilling().catch(() => null),
+      api.getQuota().catch(() => null),
       api.getUsage().catch(() => null),
       api.getMembers().catch(() => []),
       api.getKeys().catch(() => []),
     ])
-      .then(([billing, usage, members, keys]) => {
+      .then(([quota, usage, members, keys]) => {
         setStats({
-          balance: billing?.balance ?? 0,
+          balance: quota?.balance ?? 0,
+          currency: quota?.currency ?? "USD",
+          symbol: quota?.symbol ?? "$",
           requests: usage?.requests ?? 0,
           members: members?.length ?? 1,
           keys: keys?.length ?? 0,
+          plan: quota?.plan?.name ?? null,
+          monthlyPct: quota?.monthly.pct ?? null,
         });
       })
       .finally(() => setLoading(false));
@@ -55,25 +66,34 @@ export default function DashboardOverview() {
   const statCards = [
     {
       label: "Balance",
-      value: stats ? formatINR(stats.balance) : "—",
-      icon: IndianRupee,
+      value: stats
+        ? formatAmount(stats.balance, stats.currency, stats.symbol)
+        : "—",
+      sub: stats?.plan ? `${stats.plan} plan` : "Free plan",
+      icon: Wallet,
       href: "/dashboard/billing",
     },
     {
       label: "Requests (this month)",
       value: stats?.requests.toLocaleString() ?? "—",
+      sub:
+        stats?.monthlyPct !== null && stats?.monthlyPct !== undefined
+          ? `${stats.monthlyPct}% of limit used`
+          : null,
       icon: Zap,
       href: "/dashboard/usage",
     },
     {
       label: "Team Members",
       value: stats?.members.toString() ?? "—",
+      sub: null,
       icon: Users,
       href: "/dashboard/team",
     },
     {
       label: "API Keys",
       value: stats?.keys.toString() ?? "—",
+      sub: null,
       icon: Key,
       href: "/dashboard/keys",
     },
@@ -103,6 +123,9 @@ export default function DashboardOverview() {
               <stat.icon className="h-4 w-4 text-muted-foreground" />
             </div>
             <p className="mt-2 text-3xl font-bold">{stat.value}</p>
+            {stat.sub && (
+              <p className="mt-1 text-xs text-muted-foreground">{stat.sub}</p>
+            )}
           </Link>
         ))}
       </div>

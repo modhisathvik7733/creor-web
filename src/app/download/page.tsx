@@ -1,5 +1,14 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { Download, Apple, Monitor } from "lucide-react";
+import { generatePageMetadata } from "@/lib/metadata";
+
+export const metadata: Metadata = generatePageMetadata({
+  title: "Download",
+  description:
+    "Download Creor — the AI-native code editor. Available for macOS, Windows, and Linux.",
+  path: "/download",
+});
 
 const GITHUB_REPO = "modhisathvik7733/creor-app";
 const RELEASE_BASE = `https://github.com/${GITHUB_REPO}/releases/latest/download`;
