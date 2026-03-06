@@ -6,6 +6,10 @@ import Link from "next/link";
 import { api } from "@/lib/api";
 import { MessageSquare, User, Bot, ArrowLeft } from "lucide-react";
 
+export function generateStaticParams() {
+  return [];
+}
+
 type ShareItem =
   | { type: "session"; data: { id: string; title: string; time: { created: number } } }
   | { type: "message"; data: { id: string; role: string; content?: { type: string; text?: string }[]; text?: string } }
