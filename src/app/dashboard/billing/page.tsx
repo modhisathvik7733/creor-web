@@ -284,14 +284,32 @@ export default function BillingPage() {
         name: "Creor",
         description: `${result.plan.charAt(0).toUpperCase() + result.plan.slice(1)} Plan — ${result.currency} ${result.price}/mo`,
         handler: async () => {
-          // Payment successful — activate subscription immediately
+          // Payment successful — activate subscription
           try {
             await api.activateSubscription(result.subscriptionId);
           } catch {
             // May already be active via webhook
           }
           setPaymentSuccess(true);
-          await fetchData();
+          // Poll until subscription reflects in the API
+          for (let i = 0; i < 6; i++) {
+            await new Promise((r) => setTimeout(r, 1000));
+            try {
+              const [q, s, p] = await Promise.all([
+                api.getQuota(),
+                api.getSubscription(),
+                api.getPayments(),
+              ]);
+              setQuota(q);
+              setSubscription(s);
+              setPayments(p.payments);
+              if (s.active) break;
+              // Retry activation if not yet active
+              await api.activateSubscription(result.subscriptionId).catch(() => {});
+            } catch {
+              break;
+            }
+          }
         },
         modal: {
           ondismiss: () => {
