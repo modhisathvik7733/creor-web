@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import {
@@ -143,6 +143,8 @@ export default function BillingPage() {
   } | null>(null);
   const [changingPlan, setChangingPlan] = useState(false);
 
+  const currencyRef = useRef<HTMLDivElement>(null);
+
   const currency = (quota?.currency ?? "INR") as SupportedCurrency;
   const symbol = quota?.symbol ?? "₹";
   const currentPlanId = subscription?.active ? subscription.plan : "free";
@@ -233,6 +235,18 @@ export default function BillingPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Close currency picker on outside click
+  useEffect(() => {
+    if (!showCurrencyPicker) return;
+    const handler = (e: MouseEvent) => {
+      if (currencyRef.current && !currencyRef.current.contains(e.target as Node)) {
+        setShowCurrencyPicker(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showCurrencyPicker]);
 
   // ── Add Credits ──
   const handleAddCredits = async () => {
@@ -395,11 +409,11 @@ export default function BillingPage() {
     try {
       await api.patchCurrency(newCurrency);
       await fetchData();
-      setShowCurrencyPicker(false);
     } catch {
       setError("Failed to switch currency. Try again.");
     } finally {
       setSwitchingCurrency(false);
+      setShowCurrencyPicker(false);
     }
   };
 
@@ -426,7 +440,7 @@ export default function BillingPage() {
           </p>
         </div>
         {/* Currency Selector */}
-        <div className="relative">
+        <div className="relative" ref={currencyRef}>
           <button
             onClick={() => setShowCurrencyPicker(!showCurrencyPicker)}
             className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm transition-colors hover:bg-muted"
