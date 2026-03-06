@@ -186,14 +186,14 @@ class ApiClient {
     );
   }
 
-  async subscribe(plan: "starter" | "pro" | "team", callbackUrl?: string) {
+  async subscribe(plan: "starter" | "pro" | "team") {
     return this.post<{
       subscriptionId: string;
-      shortUrl: string;
       plan: string;
       price: number;
       currency: string;
-    }>("/api/billing/subscribe", { plan, callbackUrl });
+      keyId: string;
+    }>("/api/billing/subscribe", { plan });
   }
 
   async activateSubscription(subscriptionId: string) {

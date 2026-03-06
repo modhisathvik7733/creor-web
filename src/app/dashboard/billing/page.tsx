@@ -276,15 +276,38 @@ export default function BillingPage() {
   const handleSubscribe = async (planId: "starter" | "pro" | "team") => {
     setError(null);
     try {
-      const callbackUrl = `${window.location.origin}/dashboard/billing?payment=success`;
-      const result = await api.subscribe(planId, callbackUrl);
-      if (result.subscriptionId) {
-        // Store for activation on return from Razorpay
-        localStorage.setItem("creor_pending_subscription", result.subscriptionId);
-      }
-      if (result.shortUrl) {
-        window.location.href = result.shortUrl;
-      }
+      const result = await api.subscribe(planId);
+
+      const options = {
+        key: result.keyId,
+        subscription_id: result.subscriptionId,
+        name: "Creor",
+        description: `${result.plan.charAt(0).toUpperCase() + result.plan.slice(1)} Plan — ${result.currency} ${result.price}/mo`,
+        handler: async () => {
+          // Payment successful — activate subscription immediately
+          try {
+            await api.activateSubscription(result.subscriptionId);
+          } catch {
+            // May already be active via webhook
+          }
+          setPaymentSuccess(true);
+          await fetchData();
+        },
+        modal: {
+          ondismiss: () => {
+            // User closed checkout — store for activation on next visit
+            localStorage.setItem("creor_pending_subscription", result.subscriptionId);
+          },
+        },
+        theme: { color: "#171717" },
+      };
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rzp = new (window as unknown as Record<string, any>).Razorpay(options);
+      rzp.on("payment.failed", () => {
+        setError("Subscription payment failed. Please try again.");
+      });
+      rzp.open();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create subscription. Please try again.");
     }
