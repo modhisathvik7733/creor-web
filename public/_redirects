@@ -1,3 +1,4 @@
 https://creor.dev/* https://creor.ai/:splat 301!
 https://www.creor.dev/* https://creor.ai/:splat 301!
 https://www.creor.ai/* https://creor.ai/:splat 301!
+/share/:id /share?id=:id 200
