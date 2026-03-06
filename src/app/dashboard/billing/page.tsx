@@ -243,8 +243,8 @@ export default function BillingPage() {
       if (result.shortUrl) {
         window.location.href = result.shortUrl;
       }
-    } catch {
-      setError("Failed to create subscription. Please try again.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create subscription. Please try again.");
     }
   };
 
