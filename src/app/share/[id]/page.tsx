@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
-import { MessageSquare, User, Bot, ArrowLeft, Code2, FileText } from "lucide-react";
+import { MessageSquare, User, Bot, ArrowLeft } from "lucide-react";
 
 type ShareItem =
   | { type: "session"; data: { id: string; title: string; time: { created: number } } }
@@ -31,8 +31,8 @@ function extractMessages(items: ShareItem[]): { title: string; messages: Display
       let text = "";
       if (msg.content && Array.isArray(msg.content)) {
         text = msg.content
-          .filter((c: any) => c.type === "text")
-          .map((c: any) => c.text ?? "")
+          .filter((c: { type: string; text?: string }) => c.type === "text")
+          .map((c: { type: string; text?: string }) => c.text ?? "")
           .join("\n");
       } else if (typeof msg.text === "string") {
         text = msg.text;

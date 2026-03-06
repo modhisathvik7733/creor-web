@@ -53,7 +53,7 @@ function CallbackContent() {
         );
       }
     })();
-  }, [searchParams, login, code, provider]);
+  }, [searchParams, login, code, provider, stateRedirect]);
 
   if (!code || !provider) {
     return (
