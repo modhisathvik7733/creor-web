@@ -165,25 +165,27 @@ export default function BillingPage() {
     ]);
   }, []);
 
-  // Handle payment callback redirect
+  // Activate pending subscription — runs on every page load AND on redirect
   useEffect(() => {
-    if (searchParams.get("payment") !== "success") return;
+    const isPaymentReturn = searchParams.get("payment") === "success";
+    if (isPaymentReturn) {
+      router.replace("/dashboard/billing", { scroll: false });
+    }
 
-    router.replace("/dashboard/billing", { scroll: false });
+    const pendingSubId = localStorage.getItem("creor_pending_subscription");
+    if (!pendingSubId && !isPaymentReturn) return;
 
     const activate = async () => {
-      // Try to activate the subscription if we have a pending subscriptionId
-      const pendingSubId = localStorage.getItem("creor_pending_subscription");
       if (pendingSubId) {
         localStorage.removeItem("creor_pending_subscription");
         try {
           await api.activateSubscription(pendingSubId);
         } catch {
-          // Webhook may handle it, or it may already be active — continue
+          // Webhook may handle it, or it may already be active
         }
       }
 
-      // Refresh data immediately after activation
+      // Refresh data after activation
       try {
         const [q, s, p] = await Promise.all([
           api.getQuota(),
@@ -195,17 +197,15 @@ export default function BillingPage() {
         setPayments(p.payments);
         const cur = (q.currency ?? "INR") as SupportedCurrency;
         setCreditAmount(CREDIT_PRESETS[cur]?.[0] ?? 500);
-        setPaymentSuccess(true);
+        if (isPaymentReturn || s.active) setPaymentSuccess(true);
 
-        // If subscription still not showing, poll a few times (webhook delay)
-        if (!s.active) {
+        // If subscription still not showing, poll a few times
+        if (pendingSubId && !s.active) {
           let attempts = 0;
           const poll = setInterval(async () => {
             attempts++;
             try {
-              if (pendingSubId) {
-                await api.activateSubscription(pendingSubId).catch(() => {});
-              }
+              await api.activateSubscription(pendingSubId).catch(() => {});
               const [q2, s2] = await Promise.all([api.getQuota(), api.getSubscription()]);
               setQuota(q2);
               setSubscription(s2);
