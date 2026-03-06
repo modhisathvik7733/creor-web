@@ -167,23 +167,61 @@ export default function BillingPage() {
 
   // Handle payment callback redirect
   useEffect(() => {
-    if (searchParams.get("payment") === "success") {
-      setPaymentSuccess(true);
-      router.replace("/dashboard/billing", { scroll: false });
-      let attempts = 0;
-      const poll = setInterval(async () => {
-        attempts++;
+    if (searchParams.get("payment") !== "success") return;
+
+    router.replace("/dashboard/billing", { scroll: false });
+
+    const activate = async () => {
+      // Try to activate the subscription if we have a pending subscriptionId
+      const pendingSubId = localStorage.getItem("creor_pending_subscription");
+      if (pendingSubId) {
+        localStorage.removeItem("creor_pending_subscription");
         try {
-          const [q, s] = await Promise.all([api.getQuota(), api.getSubscription()]);
-          setQuota(q);
-          setSubscription(s);
-          if (s.active || attempts >= 10) clearInterval(poll);
+          await api.activateSubscription(pendingSubId);
         } catch {
-          clearInterval(poll);
+          // Webhook may handle it, or it may already be active — continue
         }
-      }, 2000);
-      return () => clearInterval(poll);
-    }
+      }
+
+      // Refresh data immediately after activation
+      try {
+        const [q, s, p] = await Promise.all([
+          api.getQuota(),
+          api.getSubscription(),
+          api.getPayments(),
+        ]);
+        setQuota(q);
+        setSubscription(s);
+        setPayments(p.payments);
+        const cur = (q.currency ?? "INR") as SupportedCurrency;
+        setCreditAmount(CREDIT_PRESETS[cur]?.[0] ?? 500);
+        setPaymentSuccess(true);
+
+        // If subscription still not showing, poll a few times (webhook delay)
+        if (!s.active) {
+          let attempts = 0;
+          const poll = setInterval(async () => {
+            attempts++;
+            try {
+              if (pendingSubId) {
+                await api.activateSubscription(pendingSubId).catch(() => {});
+              }
+              const [q2, s2] = await Promise.all([api.getQuota(), api.getSubscription()]);
+              setQuota(q2);
+              setSubscription(s2);
+              if (s2.active || attempts >= 8) clearInterval(poll);
+            } catch {
+              clearInterval(poll);
+            }
+          }, 3000);
+          return () => clearInterval(poll);
+        }
+      } catch {
+        // Best effort
+      }
+    };
+
+    activate();
   }, [searchParams, router]);
 
   useEffect(() => {
@@ -240,6 +278,10 @@ export default function BillingPage() {
     try {
       const callbackUrl = `${window.location.origin}/dashboard/billing?payment=success`;
       const result = await api.subscribe(planId, callbackUrl);
+      if (result.subscriptionId) {
+        // Store for activation on return from Razorpay
+        localStorage.setItem("creor_pending_subscription", result.subscriptionId);
+      }
       if (result.shortUrl) {
         window.location.href = result.shortUrl;
       }

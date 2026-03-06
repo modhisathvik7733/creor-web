@@ -196,6 +196,14 @@ class ApiClient {
     }>("/api/billing/subscribe", { plan, callbackUrl });
   }
 
+  async activateSubscription(subscriptionId: string) {
+    return this.post<{
+      success: boolean;
+      status: string;
+      plan?: string;
+    }>("/api/billing/activate-subscription", { subscriptionId });
+  }
+
   async getSubscription() {
     return this.get<{
       active: boolean;
