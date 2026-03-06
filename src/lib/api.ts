@@ -135,11 +135,9 @@ class ApiClient {
       balance: number;
       currency: string;
       symbol: string;
+      plan: { id: string; name: string };
       monthlyLimit: number | null;
       monthlyUsage: number;
-      reloadEnabled: boolean;
-      reloadAmount: number;
-      reloadTrigger: number;
       hasSubscription: boolean;
     }>("/api/billing");
   }
@@ -149,7 +147,7 @@ class ApiClient {
       balance: number;
       currency: string;
       symbol: string;
-      plan: { id: string; name: string; price: number | null } | null;
+      plan: { id: string; name: string; price: number | null };
       monthly: {
         current: number;
         max: number | null;
@@ -160,6 +158,7 @@ class ApiClient {
       canSend: boolean;
       blockReason: string | null;
       warnings: string[];
+      overageActive: boolean;
       exchangeRates: Record<string, number>;
     }>("/api/billing/quota");
   }
@@ -212,7 +211,26 @@ class ApiClient {
       price?: number;
       currency?: string;
       graceUntil?: string | null;
+      pendingPlan?: string | null;
+      pendingPlanEffectiveAt?: string | null;
     }>("/api/billing/subscription");
+  }
+
+  async changePlan(plan: "starter" | "pro" | "team") {
+    return this.post<{
+      success: boolean;
+      direction: "upgrade" | "downgrade";
+      newPlan: string;
+      immediate: boolean;
+    }>("/api/billing/change-plan", { plan });
+  }
+
+  async cancelSubscription() {
+    return this.post<{
+      success: boolean;
+      message: string;
+      endsAt: string | null;
+    }>("/api/billing/cancel-subscription", {});
   }
 
   async patchCurrency(currency: "USD" | "INR" | "EUR") {
