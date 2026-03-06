@@ -155,7 +155,8 @@ export default function BillingPage() {
         theme: { color: "#171717" },
       };
 
-      const rzp = new (window as any).Razorpay(options);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rzp = new (window as unknown as Record<string, any>).Razorpay(options);
       rzp.on("payment.failed", () => {
         setError("Payment failed. Please try again.");
         setAddingCredits(false);
