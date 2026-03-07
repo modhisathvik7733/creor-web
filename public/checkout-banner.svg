@@ -1,0 +1,36 @@
+<svg width="900" height="500" viewBox="0 0 900 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="900" height="500" fill="#0a0a0a"/>
+
+  <!-- Subtle grid -->
+  <defs>
+    <pattern id="g" width="50" height="50" patternUnits="userSpaceOnUse">
+      <path d="M 50 0 L 0 0 0 50" fill="none" stroke="#1a1a1a" stroke-width="0.5"/>
+    </pattern>
+    <radialGradient id="glow" cx="50%" cy="45%" r="40%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.06"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="900" height="500" fill="url(#g)" opacity="0.6"/>
+  <rect width="900" height="500" fill="url(#glow)"/>
+
+  <!-- Logo icon -->
+  <rect x="390" y="120" width="56" height="56" rx="14" fill="#fafafa"/>
+  <polyline points="420 148 432 140 420 132" stroke="#0a0a0a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <polyline points="406 132 394 140 406 148" stroke="#0a0a0a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+
+  <!-- Brand -->
+  <text x="460" y="159" font-family="system-ui, -apple-system, sans-serif" font-size="32" font-weight="700" fill="#fafafa">Creor</text>
+
+  <!-- Tagline -->
+  <text x="450" y="240" font-family="system-ui, -apple-system, sans-serif" font-size="22" font-weight="600" fill="#e0e0e0" text-anchor="middle">The AI-Native Code Editor</text>
+
+  <!-- Features -->
+  <text x="450" y="290" font-family="system-ui, -apple-system, sans-serif" font-size="15" fill="#888888" text-anchor="middle">19+ LLM Providers · Built-in Agents · Terminal-First</text>
+
+  <!-- Accent line -->
+  <rect x="350" y="330" width="200" height="1" fill="#333333"/>
+
+  <!-- creor.ai -->
+  <text x="450" y="380" font-family="ui-monospace, monospace" font-size="14" fill="#666666" text-anchor="middle">creor.ai</text>
+</svg>
