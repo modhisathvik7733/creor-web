@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
 import {
   CreditCard,
@@ -14,7 +14,129 @@ import {
   ArrowUp,
   ArrowDown,
   RotateCcw,
+  X,
+  Info,
+  AlertTriangle,
+  XCircle,
 } from "lucide-react";
+
+// ── Toast System ──
+
+type ToastVariant = "success" | "error" | "warning" | "info";
+
+interface Toast {
+  id: string;
+  variant: ToastVariant;
+  title: string;
+  description?: string;
+  action?: { label: string; onClick: () => void };
+}
+
+let toastCounter = 0;
+
+function useToasts() {
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  const dismiss = useCallback((id: string) => {
+    const timer = timersRef.current.get(id);
+    if (timer) {
+      clearTimeout(timer);
+      timersRef.current.delete(id);
+    }
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
+  const push = useCallback(
+    (toast: Omit<Toast, "id">) => {
+      const id = `toast-${++toastCounter}`;
+      setToasts((prev) => [...prev, { ...toast, id }]);
+      const timer = setTimeout(() => dismiss(id), 5000);
+      timersRef.current.set(id, timer);
+      return id;
+    },
+    [dismiss],
+  );
+
+  // Cleanup on unmount
+  useEffect(() => {
+    const timers = timersRef.current;
+    return () => {
+      timers.forEach((timer) => clearTimeout(timer));
+      timers.clear();
+    };
+  }, []);
+
+  return { toasts, push, dismiss };
+}
+
+const TOAST_ICONS: Record<ToastVariant, typeof CheckCircle2> = {
+  success: CheckCircle2,
+  error: XCircle,
+  warning: AlertTriangle,
+  info: Info,
+};
+
+const TOAST_ACCENT: Record<ToastVariant, string> = {
+  success: "text-emerald-400",
+  error: "text-red-400",
+  warning: "text-amber-400",
+  info: "text-blue-400",
+};
+
+function ToastContainer({
+  toasts,
+  onDismiss,
+}: {
+  toasts: Toast[];
+  onDismiss: (id: string) => void;
+}) {
+  return (
+    <div className="fixed bottom-5 right-5 z-50 flex flex-col-reverse gap-2.5" style={{ maxWidth: 380 }}>
+      {toasts.map((toast) => {
+        const Icon = TOAST_ICONS[toast.variant];
+        const accent = TOAST_ACCENT[toast.variant];
+        return (
+          <div
+            key={toast.id}
+            className="animate-toast-in rounded-lg border border-border/60 bg-card px-4 py-3 shadow-lg shadow-black/20"
+            role="status"
+            aria-live="polite"
+          >
+            <div className="flex items-start gap-3">
+              <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${accent}`} />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium leading-snug">{toast.title}</p>
+                {toast.description && (
+                  <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                    {toast.description}
+                  </p>
+                )}
+                {toast.action && (
+                  <button
+                    onClick={toast.action.onClick}
+                    className={`mt-1.5 text-xs font-medium ${accent} hover:underline`}
+                  >
+                    {toast.action.label}
+                  </button>
+                )}
+              </div>
+              <button
+                onClick={() => onDismiss(toast.id)}
+                className="shrink-0 rounded p-0.5 text-muted-foreground/60 transition-colors hover:text-foreground"
+                aria-label="Close notification"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Data Types ──
 
 interface QuotaInfo {
   balance: number;
@@ -96,6 +218,8 @@ function formatDate(iso: string): string {
   });
 }
 
+// ── Main Component ──
+
 export default function BillingPage() {
   const [quota, setQuota] = useState<QuotaInfo | null>(null);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
@@ -103,13 +227,16 @@ export default function BillingPage() {
   const [loading, setLoading] = useState(true);
   const [addingCredits, setAddingCredits] = useState(false);
   const [creditAmount, setCreditAmount] = useState(5);
-  const [paymentSuccess, setPaymentSuccess] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<{
     type: "downgrade" | "cancel";
     plan?: string;
   } | null>(null);
   const [changingPlan, setChangingPlan] = useState(false);
+
+  const { toasts, push: pushToast, dismiss: dismissToast } = useToasts();
+
+  // Track which warning toasts we already showed so we don't re-fire on every render
+  const shownWarningsRef = useRef<Set<string>>(new Set());
 
   const currentPlanId = subscription?.active ? subscription.plan : "free";
 
@@ -138,25 +265,120 @@ export default function BillingPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("payment") === "success" || params.get("subscription") === "success") {
-      setPaymentSuccess(true);
+      pushToast({
+        variant: "success",
+        title: "Payment successful!",
+        description: "Your account has been updated.",
+      });
       // Clean URL
       window.history.replaceState({}, "", window.location.pathname);
       // Refresh data (webhook may take a moment)
       const timer = setTimeout(() => fetchData(), 2000);
       return () => clearTimeout(timer);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Show warning/info toasts when quota data loads — fire once per warning type
+  useEffect(() => {
+    if (!quota) return;
+
+    // using_credits warning
+    if (quota.warnings.includes("using_credits") && !shownWarningsRef.current.has("using_credits")) {
+      shownWarningsRef.current.add("using_credits");
+      pushToast({
+        variant: "warning",
+        title: "Using top-up credits",
+        description: "Plan allowance exceeded — using top-up credits for overage.",
+      });
+    }
+
+    // monthly_approaching warning
+    if (quota.warnings.includes("monthly_approaching") && !shownWarningsRef.current.has("monthly_approaching")) {
+      shownWarningsRef.current.add("monthly_approaching");
+      const resetMsg = quota.monthly.resetsAt ? formatDate(quota.monthly.resetsAt) : "next month";
+      const extra = quota.balance <= 0 ? " Add credits to continue after the limit." : "";
+      pushToast({
+        variant: "warning",
+        title: `${quota.monthly.pct}% of plan allowance used`,
+        description: `Resets ${resetMsg}.${extra}`,
+      });
+    }
+
+    // blocked
+    if (!quota.canSend && !shownWarningsRef.current.has("blocked")) {
+      shownWarningsRef.current.add("blocked");
+      const blockTitle =
+        quota.blockReason === "free_limit_no_credits"
+          ? "Free tier limit reached"
+          : quota.blockReason === "limit_no_credits"
+            ? "Plan limit reached"
+            : "Sending blocked";
+      const blockDesc =
+        quota.blockReason === "free_limit_no_credits"
+          ? "Subscribe to a plan or add credits to continue."
+          : quota.blockReason === "limit_no_credits"
+            ? "Add credits or upgrade your plan to continue."
+            : `Usage resets ${quota.monthly.resetsAt ? formatDate(quota.monthly.resetsAt) : "next month"}.`;
+      pushToast({
+        variant: "error",
+        title: blockTitle,
+        description: blockDesc,
+      });
+    }
+  }, [quota, pushToast]);
+
+  // Grace period toast
+  useEffect(() => {
+    if (
+      subscription?.active &&
+      subscription.graceUntil &&
+      !shownWarningsRef.current.has("grace")
+    ) {
+      shownWarningsRef.current.add("grace");
+      pushToast({
+        variant: "warning",
+        title: "Subscription cancelled",
+        description: `Access continues until ${formatDate(subscription.graceUntil)}.`,
+        action: {
+          label: "Resume subscription",
+          onClick: handleResumeSubscription,
+        },
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subscription]);
+
+  // Pending downgrade toast
+  useEffect(() => {
+    if (
+      subscription?.pendingPlan &&
+      subscription.pendingPlanEffectiveAt &&
+      !shownWarningsRef.current.has("pending_downgrade")
+    ) {
+      shownWarningsRef.current.add("pending_downgrade");
+      const planLabel = subscription.pendingPlan.charAt(0).toUpperCase() + subscription.pendingPlan.slice(1);
+      pushToast({
+        variant: "info",
+        title: `Downgrading to ${planLabel}`,
+        description: `Takes effect on ${formatDate(subscription.pendingPlanEffectiveAt)}.`,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subscription]);
 
   // ── Add Credits ──
   const handleAddCredits = async () => {
     setAddingCredits(true);
-    setError(null);
     try {
       const result = await api.addCredits(creditAmount);
       window.location.href = result.checkoutUrl;
     } catch {
-      setError("Failed to create checkout. Please try again.");
+      pushToast({
+        variant: "error",
+        title: "Checkout failed",
+        description: "Failed to create checkout. Please try again.",
+      });
     } finally {
       setAddingCredits(false);
     }
@@ -164,12 +386,15 @@ export default function BillingPage() {
 
   // ── Subscribe (new subscription) ──
   const handleSubscribe = async (planId: "starter" | "pro" | "team") => {
-    setError(null);
     try {
       const result = await api.subscribe(planId);
       window.location.href = result.checkoutUrl;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create subscription.");
+      pushToast({
+        variant: "error",
+        title: "Subscription failed",
+        description: err instanceof Error ? err.message : "Failed to create subscription.",
+      });
     }
   };
 
@@ -191,13 +416,20 @@ export default function BillingPage() {
 
     // Upgrade — direct API call, no new checkout needed
     setChangingPlan(true);
-    setError(null);
     try {
       await api.changePlan(planId);
-      setPaymentSuccess(true);
+      pushToast({
+        variant: "success",
+        title: "Plan upgraded!",
+        description: "Your account has been updated.",
+      });
       await fetchData();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to change plan.");
+      pushToast({
+        variant: "error",
+        title: "Upgrade failed",
+        description: err instanceof Error ? err.message : "Failed to change plan.",
+      });
     } finally {
       setChangingPlan(false);
     }
@@ -206,13 +438,16 @@ export default function BillingPage() {
   const confirmDowngrade = async () => {
     if (!confirmAction?.plan) return;
     setChangingPlan(true);
-    setError(null);
     setConfirmAction(null);
     try {
       await api.changePlan(confirmAction.plan as "starter" | "pro" | "team");
       await fetchData();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to downgrade.");
+      pushToast({
+        variant: "error",
+        title: "Downgrade failed",
+        description: err instanceof Error ? err.message : "Failed to downgrade.",
+      });
     } finally {
       setChangingPlan(false);
     }
@@ -221,13 +456,16 @@ export default function BillingPage() {
   // ── Cancel Subscription ──
   const handleCancelSubscription = async () => {
     setChangingPlan(true);
-    setError(null);
     setConfirmAction(null);
     try {
       await api.cancelSubscription();
       await fetchData();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to cancel subscription.");
+      pushToast({
+        variant: "error",
+        title: "Cancellation failed",
+        description: err instanceof Error ? err.message : "Failed to cancel subscription.",
+      });
     } finally {
       setChangingPlan(false);
     }
@@ -236,12 +474,15 @@ export default function BillingPage() {
   // ── Resume Subscription ──
   const handleResumeSubscription = async () => {
     setChangingPlan(true);
-    setError(null);
     try {
       await api.resumeSubscription();
       await fetchData();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to resume subscription.");
+      pushToast({
+        variant: "error",
+        title: "Resume failed",
+        description: err instanceof Error ? err.message : "Failed to resume subscription.",
+      });
     } finally {
       setChangingPlan(false);
     }
@@ -259,6 +500,9 @@ export default function BillingPage() {
 
   return (
     <div className="p-8">
+      {/* Toast Notifications */}
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-2xl font-bold tracking-tight">Billing</h1>
@@ -266,31 +510,6 @@ export default function BillingPage() {
           Manage your plan and credits
         </p>
       </div>
-
-      {/* Payment Success Banner */}
-      {paymentSuccess && (
-        <div className="mb-6 flex items-center gap-3 rounded-xl border border-green-500/30 bg-green-500/10 p-4">
-          <CheckCircle2 className="h-5 w-5 shrink-0 text-green-500" />
-          <div>
-            <p className="font-medium text-green-500">Payment successful!</p>
-            <p className="text-sm text-green-500/80">Your account has been updated.</p>
-          </div>
-          <button onClick={() => setPaymentSuccess(false)} className="ml-auto text-sm text-green-500/60 hover:text-green-500">
-            Dismiss
-          </button>
-        </div>
-      )}
-
-      {/* Error Banner */}
-      {error && (
-        <div className="mb-6 flex items-center gap-3 rounded-xl border border-red-500/30 bg-red-500/10 p-4">
-          <AlertCircle className="h-5 w-5 shrink-0 text-red-500" />
-          <p className="font-medium text-red-500">{error}</p>
-          <button onClick={() => setError(null)} className="ml-auto text-sm text-red-500/60 hover:text-red-500">
-            Dismiss
-          </button>
-        </div>
-      )}
 
       {/* Confirmation Dialog */}
       {confirmAction && (
@@ -320,78 +539,6 @@ export default function BillingPage() {
               </button>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Warnings */}
-      {quota?.warnings.includes("using_credits") && (
-        <div className="mb-6 flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
-          <AlertCircle className="h-5 w-5 shrink-0 text-amber-500" />
-          <p className="text-sm font-medium text-amber-500">
-            Plan allowance exceeded — using top-up credits for overage.
-          </p>
-        </div>
-      )}
-      {quota?.warnings.includes("monthly_approaching") && (
-        <div className="mb-6 flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
-          <AlertCircle className="h-5 w-5 shrink-0 text-amber-500" />
-          <p className="text-sm font-medium text-amber-500">
-            You&apos;ve used {monthlyPct}% of your plan allowance. Resets{" "}
-            {quota.monthly.resetsAt ? formatDate(quota.monthly.resetsAt) : "next month"}.
-            {quota.balance <= 0 && " Add credits to continue after the limit."}
-          </p>
-        </div>
-      )}
-      {/* Blocked Banner */}
-      {quota && !quota.canSend && (
-        <div className="mb-6 flex items-center gap-3 rounded-xl border border-red-500/30 bg-red-500/10 p-4">
-          <AlertCircle className="h-5 w-5 shrink-0 text-red-500" />
-          <div>
-            <p className="font-medium text-red-500">
-              {quota.blockReason === "free_limit_no_credits"
-                ? "Free tier limit reached"
-                : quota.blockReason === "limit_no_credits"
-                  ? "Plan limit reached"
-                  : "Sending blocked"}
-            </p>
-            <p className="text-sm text-red-500/80">
-              {quota.blockReason === "free_limit_no_credits"
-                ? "Subscribe to a plan or add credits to continue."
-                : quota.blockReason === "limit_no_credits"
-                  ? "Add credits or upgrade your plan to continue."
-                  : `Usage resets ${quota.monthly.resetsAt ? formatDate(quota.monthly.resetsAt) : "next month"}.`}
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Grace Period Notice */}
-      {subscription?.active && subscription.graceUntil && (
-        <div className="mb-6 flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
-          <Clock className="h-5 w-5 shrink-0 text-amber-500" />
-          <div className="flex-1">
-            <p className="text-sm font-medium text-amber-500">
-              Subscription cancelled — access until {formatDate(subscription.graceUntil)}.
-            </p>
-          </div>
-          <button
-            onClick={handleResumeSubscription}
-            disabled={changingPlan}
-            className="flex items-center gap-1.5 rounded-lg border border-amber-500/30 px-3 py-1.5 text-xs font-medium text-amber-500 transition-colors hover:bg-amber-500/10 disabled:opacity-50"
-          >
-            <RotateCcw className="h-3 w-3" /> Resume
-          </button>
-        </div>
-      )}
-
-      {/* Pending Downgrade Notice */}
-      {subscription?.pendingPlan && subscription.pendingPlanEffectiveAt && (
-        <div className="mb-6 flex items-center gap-3 rounded-xl border border-blue-500/30 bg-blue-500/10 p-4">
-          <ArrowDown className="h-5 w-5 shrink-0 text-blue-500" />
-          <p className="text-sm font-medium text-blue-500">
-            Downgrading to {subscription.pendingPlan.charAt(0).toUpperCase() + subscription.pendingPlan.slice(1)} on{" "}
-            {formatDate(subscription.pendingPlanEffectiveAt)}.
-          </p>
         </div>
       )}
 
@@ -534,16 +681,16 @@ export default function BillingPage() {
             return (
               <div
                 key={plan.id}
-                className={`rounded-xl border p-5 ${
+                className={`rounded-xl border p-5 transition-colors ${
                   isCurrent
-                    ? "border-foreground/30 bg-foreground/5"
+                    ? "border-border/80 bg-card ring-1 ring-foreground/[0.08]"
                     : "border-border bg-card"
                 }`}
               >
                 <div className="flex items-center gap-2">
                   <h3 className="font-semibold">{plan.name}</h3>
                   {isCurrent && (
-                    <span className="rounded-full bg-foreground/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide">
+                    <span className="rounded-full bg-foreground/[0.07] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                       Current
                     </span>
                   )}
