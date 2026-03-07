@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
 import {
   CreditCard,
@@ -11,15 +10,20 @@ import {
   CheckCircle2,
   Wallet,
   Clock,
-  ArrowRightLeft,
-  ChevronDown,
   Receipt,
   ArrowUp,
   ArrowDown,
-  XCircle,
+  RotateCcw,
 } from "lucide-react";
 
-type SupportedCurrency = "USD" | "INR";
+declare global {
+  interface Window {
+    createLemonSqueezy?: () => void;
+    LemonSqueezy?: {
+      Url: { Open: (url: string) => void };
+    };
+  }
+}
 
 interface QuotaInfo {
   balance: number;
@@ -37,7 +41,6 @@ interface QuotaInfo {
   blockReason: string | null;
   warnings: string[];
   overageActive: boolean;
-  exchangeRates: Record<string, number>;
 }
 
 interface Subscription {
@@ -60,57 +63,38 @@ interface Payment {
   timeCreated: string;
 }
 
-const CURRENCIES: { id: SupportedCurrency; label: string; symbol: string }[] = [
-  { id: "USD", label: "US Dollar", symbol: "$" },
-  { id: "INR", label: "Indian Rupee", symbol: "₹" },
-];
-
-const CREDIT_PRESETS: Record<SupportedCurrency, number[]> = {
-  USD: [5, 10, 25, 50],
-  INR: [500, 1000, 2500, 5000],
-};
-
-const MIN_CREDIT: Record<SupportedCurrency, number> = {
-  USD: 1,
-  INR: 100,
-};
+const CREDIT_PRESETS = [5, 10, 25, 50];
+const MIN_CREDIT = 1;
 
 const PLAN_DEFS = [
   {
     id: "free",
     name: "Free",
-    prices: { USD: 0, INR: 0 },
+    price: 0,
     features: ["All models", "$0.50/month included", "Top up anytime"],
-    monthlyLimit: 500000,
   },
   {
     id: "starter",
     name: "Starter",
-    prices: { USD: 599, INR: 49900 },
+    price: 5.99,
     features: ["All models", "Email support", "$6/month included", "Top up for overage"],
-    monthlyLimit: 6000000,
   },
   {
     id: "pro",
     name: "Pro",
-    prices: { USD: 2399, INR: 199900 },
+    price: 23.99,
     features: ["All models", "Priority models", "Priority support", "$24/month included"],
-    monthlyLimit: 24000000,
   },
   {
     id: "team",
     name: "Team",
-    prices: { USD: 5999, INR: 499900 },
+    price: 59.99,
     features: ["All models", "Priority models", "Dedicated support", "Admin roles", "$60/month included"],
-    monthlyLimit: 60000000,
   },
 ];
 
-function formatCurrency(amount: number, currency: string, symbol: string): string {
-  if (currency === "INR") {
-    return `${symbol}${amount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  }
-  return `${symbol}${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+function formatCurrency(amount: number): string {
+  return `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function formatDate(iso: string): string {
@@ -122,37 +106,43 @@ function formatDate(iso: string): string {
 }
 
 export default function BillingPage() {
-  const searchParams = useSearchParams();
-  const router = useRouter();
   const [quota, setQuota] = useState<QuotaInfo | null>(null);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [addingCredits, setAddingCredits] = useState(false);
-  const [creditAmount, setCreditAmount] = useState(500);
+  const [creditAmount, setCreditAmount] = useState(5);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
-  const [switchingCurrency, setSwitchingCurrency] = useState(false);
   const [confirmAction, setConfirmAction] = useState<{
     type: "downgrade" | "cancel";
     plan?: string;
   } | null>(null);
   const [changingPlan, setChangingPlan] = useState(false);
 
-  const currencyRef = useRef<HTMLDivElement>(null);
-
-  const currency = (quota?.currency ?? "INR") as SupportedCurrency;
-  const symbol = quota?.symbol ?? "₹";
   const currentPlanId = subscription?.active ? subscription.plan : "free";
 
-  // Load Cashfree checkout SDK
+  // Load Lemon Squeezy JS
   useEffect(() => {
-    if (document.querySelector('script[src*="cashfree"]')) return;
+    if (document.querySelector('script[src*="lemonsqueezy"]')) return;
     const script = document.createElement("script");
-    script.src = "https://sdk.cashfree.com/js/v3/cashfree.js";
-    script.async = true;
+    script.src = "https://assets.lemonsqueezy.com/lemon.js";
+    script.defer = true;
+    script.onload = () => window.createLemonSqueezy?.();
     document.body.appendChild(script);
+  }, []);
+
+  // Listen for LS checkout success events
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      if (event.data?.event === "Checkout.Success") {
+        setPaymentSuccess(true);
+        fetchData();
+      }
+    };
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchData = useCallback(async () => {
@@ -165,8 +155,6 @@ export default function BillingPage() {
       setQuota(q);
       setSubscription(s);
       setPayments(p.payments);
-      const cur = (q.currency ?? "INR") as SupportedCurrency;
-      setCreditAmount(CREDIT_PRESETS[cur]?.[0] ?? 500);
     } catch {
       // silently fail — auth redirect handled by api client
     } finally {
@@ -174,109 +162,38 @@ export default function BillingPage() {
     }
   }, []);
 
-  // Activate pending subscription — runs when returning from Cashfree checkout
-  useEffect(() => {
-    const pendingSubId = localStorage.getItem("creor_pending_subscription");
-    if (!pendingSubId) return;
-
-    localStorage.removeItem("creor_pending_subscription");
-
-    const activate = async () => {
-      // Try activating — will only succeed if Cashfree status is ACTIVE (payment completed)
-      try {
-        await api.activateSubscription(pendingSubId);
-      } catch {
-        // Payment not completed or webhook will handle it
-      }
-
-      // Refresh data and check actual status
-      try {
-        const [q, s, p] = await Promise.all([
-          api.getQuota(),
-          api.getSubscription(),
-          api.getPayments(),
-        ]);
-        setQuota(q);
-        setSubscription(s);
-        setPayments(p.payments);
-
-        // Only show success if subscription is actually active
-        if (s.active) {
-          setPaymentSuccess(true);
-        } else {
-          // Poll a few times — Cashfree webhook may activate it shortly
-          let attempts = 0;
-          const poll = setInterval(async () => {
-            attempts++;
-            try {
-              await api.activateSubscription(pendingSubId).catch(() => {});
-              const [q2, s2] = await Promise.all([api.getQuota(), api.getSubscription()]);
-              setQuota(q2);
-              setSubscription(s2);
-              if (s2.active) {
-                setPaymentSuccess(true);
-                clearInterval(poll);
-              }
-              if (attempts >= 8) clearInterval(poll);
-            } catch {
-              clearInterval(poll);
-            }
-          }, 3000);
-          return () => clearInterval(poll);
-        }
-      } catch {
-        // Best effort
-      }
-    };
-
-    activate();
-  }, []);
-
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  // Close currency picker on outside click
+  // Check URL params for post-checkout redirect
   useEffect(() => {
-    if (!showCurrencyPicker) return;
-    const handler = (e: MouseEvent) => {
-      if (currencyRef.current && !currencyRef.current.contains(e.target as Node)) {
-        setShowCurrencyPicker(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [showCurrencyPicker]);
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("payment") === "success" || params.get("subscription") === "success") {
+      setPaymentSuccess(true);
+      // Clean URL
+      window.history.replaceState({}, "", window.location.pathname);
+      // Refresh data (webhook may take a moment)
+      const timer = setTimeout(() => fetchData(), 2000);
+      return () => clearTimeout(timer);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Add Credits ──
   const handleAddCredits = async () => {
     setAddingCredits(true);
     setError(null);
     try {
-      const order = await api.addCredits(creditAmount);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const cashfree = new (window as any).Cashfree({
-        mode: process.env.NEXT_PUBLIC_CASHFREE_ENV === "sandbox" ? "sandbox" : "production",
-      });
-      const result = await cashfree.checkout({
-        paymentSessionId: order.paymentSessionId,
-        redirectTarget: "_modal",
-      });
-      if (result.error) {
-        setError("Payment failed. Please try again.");
-        setAddingCredits(false);
-        return;
+      const result = await api.addCredits(creditAmount);
+      if (window.LemonSqueezy) {
+        window.LemonSqueezy.Url.Open(result.checkoutUrl);
+      } else {
+        window.open(result.checkoutUrl, "_blank");
       }
-      try {
-        await api.verifyPayment({ orderId: order.orderId });
-        setPaymentSuccess(true);
-        await fetchData();
-      } catch {
-        setError("Payment verification failed. Contact support if charged.");
-      }
-      setAddingCredits(false);
     } catch {
-      setError("Failed to create order");
+      setError("Failed to create checkout. Please try again.");
+    } finally {
       setAddingCredits(false);
     }
   };
@@ -286,18 +203,11 @@ export default function BillingPage() {
     setError(null);
     try {
       const result = await api.subscribe(planId);
-      // Store pending subscription before redirect
-      localStorage.setItem("creor_pending_subscription", result.subscriptionId);
-      // Cashfree subscriptions use subscriptionsCheckout() with subsSessionId
-      // (different from orders which use checkout() with paymentSessionId)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const cashfree = new (window as any).Cashfree({
-        mode: process.env.NEXT_PUBLIC_CASHFREE_ENV === "sandbox" ? "sandbox" : "production",
-      });
-      cashfree.subscriptionsCheckout({
-        subsSessionId: result.paymentSessionId,
-        redirectTarget: "_self",
-      });
+      if (window.LemonSqueezy) {
+        window.LemonSqueezy.Url.Open(result.checkoutUrl);
+      } else {
+        window.open(result.checkoutUrl, "_blank");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create subscription.");
     }
@@ -310,36 +220,20 @@ export default function BillingPage() {
       return;
     }
 
-    // Check direction
     const currentIdx = PLAN_DEFS.findIndex((p) => p.id === currentPlanId);
     const newIdx = PLAN_DEFS.findIndex((p) => p.id === planId);
-    const isUpgrade = newIdx > currentIdx;
+    const isDowngrade = newIdx < currentIdx;
 
-    if (!isUpgrade) {
+    if (isDowngrade) {
       setConfirmAction({ type: "downgrade", plan: planId });
       return;
     }
 
+    // Upgrade — direct API call, no new checkout needed
     setChangingPlan(true);
     setError(null);
     try {
-      const result = await api.changePlan(planId);
-
-      if (result.requiresCheckout && result.paymentSessionId) {
-        // Upgrade requires a new subscription checkout (new mandate at higher price)
-        localStorage.setItem("creor_pending_subscription", result.subscriptionId ?? "");
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const cashfree = new (window as any).Cashfree({
-          mode: process.env.NEXT_PUBLIC_CASHFREE_ENV === "sandbox" ? "sandbox" : "production",
-        });
-        cashfree.subscriptionsCheckout({
-          subsSessionId: result.paymentSessionId,
-          redirectTarget: "_self",
-        });
-        return; // page will redirect
-      }
-
-      // Downgrade — no checkout needed
+      await api.changePlan(planId);
       setPaymentSuccess(true);
       await fetchData();
     } catch (err) {
@@ -379,19 +273,17 @@ export default function BillingPage() {
     }
   };
 
-  // ── Switch Currency ──
-  const handleSwitchCurrency = async (newCurrency: SupportedCurrency) => {
-    if (newCurrency === currency || switchingCurrency) return;
-    setSwitchingCurrency(true);
+  // ── Resume Subscription ──
+  const handleResumeSubscription = async () => {
+    setChangingPlan(true);
     setError(null);
     try {
-      await api.patchCurrency(newCurrency);
+      await api.resumeSubscription();
       await fetchData();
-    } catch {
-      setError("Failed to switch currency. Try again.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to resume subscription.");
     } finally {
-      setSwitchingCurrency(false);
-      setShowCurrencyPicker(false);
+      setChangingPlan(false);
     }
   };
 
@@ -403,48 +295,16 @@ export default function BillingPage() {
     );
   }
 
-  const presets = CREDIT_PRESETS[currency] ?? CREDIT_PRESETS.USD;
-  const minCredit = MIN_CREDIT[currency] ?? 1;
   const monthlyPct = quota?.monthly.pct;
 
   return (
     <div className="p-8">
       {/* Header */}
-      <div className="mb-8 flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Billing</h1>
-          <p className="mt-1 text-muted-foreground">
-            Manage your plan, credits, and currency
-          </p>
-        </div>
-        {/* Currency Selector */}
-        <div className="relative" ref={currencyRef}>
-          <button
-            onClick={() => setShowCurrencyPicker(!showCurrencyPicker)}
-            className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm transition-colors hover:bg-muted"
-          >
-            <ArrowRightLeft className="h-3.5 w-3.5 text-muted-foreground" />
-            {CURRENCIES.find((c) => c.id === currency)?.symbol} {currency}
-            <ChevronDown className="h-3 w-3 text-muted-foreground" />
-          </button>
-          {showCurrencyPicker && (
-            <div className="absolute right-0 top-full z-10 mt-1 w-48 rounded-lg border border-border bg-card shadow-lg">
-              {CURRENCIES.map((c) => (
-                <button
-                  key={c.id}
-                  onClick={() => handleSwitchCurrency(c.id)}
-                  disabled={switchingCurrency}
-                  className={`flex w-full items-center justify-between px-3 py-2.5 text-sm transition-colors hover:bg-muted first:rounded-t-lg last:rounded-b-lg ${
-                    c.id === currency ? "font-medium text-foreground" : "text-muted-foreground"
-                  }`}
-                >
-                  <span>{c.symbol} {c.label}</span>
-                  {c.id === currency && <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold tracking-tight">Billing</h1>
+        <p className="mt-1 text-muted-foreground">
+          Manage your plan and credits
+        </p>
       </div>
 
       {/* Payment Success Banner */}
@@ -554,6 +414,25 @@ export default function BillingPage() {
         </div>
       )}
 
+      {/* Grace Period Notice */}
+      {subscription?.active && subscription.graceUntil && (
+        <div className="mb-6 flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
+          <Clock className="h-5 w-5 shrink-0 text-amber-500" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-amber-500">
+              Subscription cancelled — access until {formatDate(subscription.graceUntil)}.
+            </p>
+          </div>
+          <button
+            onClick={handleResumeSubscription}
+            disabled={changingPlan}
+            className="flex items-center gap-1.5 rounded-lg border border-amber-500/30 px-3 py-1.5 text-xs font-medium text-amber-500 transition-colors hover:bg-amber-500/10 disabled:opacity-50"
+          >
+            <RotateCcw className="h-3 w-3" /> Resume
+          </button>
+        </div>
+      )}
+
       {/* Pending Downgrade Notice */}
       {subscription?.pendingPlan && subscription.pendingPlanEffectiveAt && (
         <div className="mb-6 flex items-center gap-3 rounded-xl border border-blue-500/30 bg-blue-500/10 p-4">
@@ -574,7 +453,7 @@ export default function BillingPage() {
             <Zap className="h-4 w-4 text-muted-foreground" />
           </div>
           <p className="mt-2 text-3xl font-bold">
-            {quota ? formatCurrency(quota.monthly.current, currency, symbol) : "—"}
+            {quota ? formatCurrency(quota.monthly.current) : "—"}
           </p>
           {quota?.monthly.max !== null && quota?.monthly.max !== undefined ? (
             <>
@@ -593,8 +472,7 @@ export default function BillingPage() {
                 />
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
-                {formatCurrency(quota!.monthly.current, currency, symbol)} /{" "}
-                {formatCurrency(quota!.monthly.max, currency, symbol)}
+                {formatCurrency(quota!.monthly.current)} / {formatCurrency(quota!.monthly.max)}
                 {quota?.overageActive && <span className="text-orange-500"> (overage)</span>}
                 {quota!.monthly.resetsAt && <> · Resets {formatDate(quota!.monthly.resetsAt)}</>}
               </p>
@@ -611,7 +489,7 @@ export default function BillingPage() {
             <Wallet className="h-4 w-4 text-muted-foreground" />
           </div>
           <p className="mt-2 text-3xl font-bold">
-            {quota ? formatCurrency(quota.balance, currency, symbol) : "—"}
+            {quota ? formatCurrency(quota.balance) : "—"}
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
             Used for overage beyond plan allowance
@@ -631,32 +509,16 @@ export default function BillingPage() {
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
             {subscription?.active && subscription.price
-              ? `${symbol}${subscription.price}/month`
+              ? `$${subscription.price}/month`
               : "Free tier"}
           </p>
-          {subscription?.active && (
-            <div className="mt-2 flex items-center gap-3">
-              <button
-                onClick={() => setConfirmAction({ type: "cancel" })}
-                className="text-xs text-red-500/70 hover:text-red-500"
-              >
-                Cancel subscription
-              </button>
-              <button
-                onClick={async () => {
-                  if (!confirm("DEV: Reset subscription? This removes it so you can re-subscribe.")) return;
-                  try {
-                    await api.resetSubscription();
-                    await fetchData();
-                  } catch (err) {
-                    setError(err instanceof Error ? err.message : "Reset failed");
-                  }
-                }}
-                className="text-xs text-yellow-500/70 hover:text-yellow-500"
-              >
-                Reset (Dev)
-              </button>
-            </div>
+          {subscription?.active && !subscription.graceUntil && (
+            <button
+              onClick={() => setConfirmAction({ type: "cancel" })}
+              className="mt-2 text-xs text-red-500/70 hover:text-red-500"
+            >
+              Cancel subscription
+            </button>
           )}
         </div>
       </div>
@@ -669,18 +531,18 @@ export default function BillingPage() {
         </p>
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-1 rounded-lg border border-border px-3 py-2">
-            <span className="text-sm text-muted-foreground">{symbol}</span>
+            <span className="text-sm text-muted-foreground">$</span>
             <input
               type="number"
               value={creditAmount}
               onChange={(e) => setCreditAmount(Number(e.target.value))}
-              min={minCredit}
-              step={currency === "INR" ? 100 : 1}
+              min={MIN_CREDIT}
+              step={1}
               className="w-24 bg-transparent text-sm outline-none"
             />
           </div>
           <div className="flex gap-2">
-            {presets.map((amount) => (
+            {CREDIT_PRESETS.map((amount) => (
               <button
                 key={amount}
                 onClick={() => setCreditAmount(amount)}
@@ -690,14 +552,13 @@ export default function BillingPage() {
                     : "border-border hover:bg-muted"
                 }`}
               >
-                {symbol}
-                {currency === "INR" ? amount.toLocaleString("en-IN") : amount.toLocaleString("en-US")}
+                ${amount}
               </button>
             ))}
           </div>
           <button
             onClick={handleAddCredits}
-            disabled={addingCredits || creditAmount < minCredit}
+            disabled={addingCredits || creditAmount < MIN_CREDIT}
             className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
           >
             <Plus className="h-3.5 w-3.5" />
@@ -711,8 +572,6 @@ export default function BillingPage() {
         <h2 className="mb-4 font-semibold">Plans</h2>
         <div className="grid gap-4 sm:grid-cols-4">
           {PLAN_DEFS.map((plan) => {
-            const priceSmallest = plan.prices[currency] ?? plan.prices.USD ?? 0;
-            const priceDisplay = priceSmallest / 100;
             const isCurrent = plan.id === currentPlanId;
             const isPending = subscription?.pendingPlan === plan.id;
             const currentIdx = PLAN_DEFS.findIndex((p) => p.id === currentPlanId);
@@ -749,10 +608,7 @@ export default function BillingPage() {
                   ) : (
                     <>
                       <span className="text-3xl font-bold">
-                        {symbol}
-                        {currency === "INR"
-                          ? priceDisplay.toLocaleString("en-IN")
-                          : priceDisplay.toLocaleString("en-US")}
+                        ${plan.price.toFixed(2)}
                       </span>
                       <span className="text-sm text-muted-foreground">/month</span>
                     </>
@@ -802,7 +658,7 @@ export default function BillingPage() {
         </div>
         <p className="mt-4 flex items-center gap-1.5 text-xs text-muted-foreground">
           <AlertCircle className="h-3 w-3" />
-          Upgrades are immediate with prorated billing. Downgrades take effect at cycle end. Prices in {currency}.
+          Upgrades are immediate with prorated billing. Downgrades take effect at cycle end. All prices in USD.
         </p>
       </div>
 
@@ -821,49 +677,43 @@ export default function BillingPage() {
           </div>
         ) : (
           <div className="divide-y divide-border">
-            {payments.map((p) => {
-              const pSymbol = CURRENCIES.find((c) => c.id === p.currency)?.symbol ?? "$";
-              return (
-                <div key={p.id} className="flex items-center justify-between px-5 py-3">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-medium ${
-                        p.type === "onboarding"
-                          ? "bg-blue-500/10 text-blue-500"
-                          : p.type === "credits"
-                            ? "bg-green-500/10 text-green-500"
-                            : p.type === "subscription"
-                              ? "bg-purple-500/10 text-purple-500"
-                              : "bg-muted text-muted-foreground"
-                      }`}
-                    >
-                      {p.type === "onboarding" ? "OB" : p.type === "credits" ? "CR" : p.type === "subscription" ? "SB" : "RF"}
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium capitalize">
-                        {p.type === "onboarding" ? "Onboarding Credits" : p.type}
-                      </p>
-                      <p className="text-xs text-muted-foreground">{formatDate(p.timeCreated)}</p>
-                    </div>
+            {payments.map((p) => (
+              <div key={p.id} className="flex items-center justify-between px-5 py-3">
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-medium ${
+                      p.type === "onboarding"
+                        ? "bg-blue-500/10 text-blue-500"
+                        : p.type === "credits"
+                          ? "bg-green-500/10 text-green-500"
+                          : p.type === "subscription"
+                            ? "bg-purple-500/10 text-purple-500"
+                            : "bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    {p.type === "onboarding" ? "OB" : p.type === "credits" ? "CR" : p.type === "subscription" ? "SB" : "RF"}
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm font-medium">
-                      {pSymbol}
-                      {p.currency === "INR"
-                        ? p.amount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                        : p.amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  <div>
+                    <p className="text-sm font-medium capitalize">
+                      {p.type === "onboarding" ? "Onboarding Credits" : p.type}
                     </p>
-                    <p
-                      className={`text-xs capitalize ${
-                        p.status === "captured" ? "text-green-500" : p.status === "failed" ? "text-red-500" : "text-muted-foreground"
-                      }`}
-                    >
-                      {p.status}
-                    </p>
+                    <p className="text-xs text-muted-foreground">{formatDate(p.timeCreated)}</p>
                   </div>
                 </div>
-              );
-            })}
+                <div className="text-right">
+                  <p className="text-sm font-medium">
+                    ${p.amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
+                  <p
+                    className={`text-xs capitalize ${
+                      p.status === "captured" ? "text-green-500" : p.status === "failed" ? "text-red-500" : "text-muted-foreground"
+                    }`}
+                  >
+                    {p.status}
+                  </p>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>

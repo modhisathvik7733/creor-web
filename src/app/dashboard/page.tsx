@@ -22,11 +22,8 @@ interface DashboardStats {
   monthlyPct: number | null;
 }
 
-function formatAmount(amount: number, currency: string, symbol: string): string {
-  if (currency === "INR") {
-    return `${symbol}${amount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  }
-  return `${symbol}${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+function formatAmount(amount: number): string {
+  return `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 export default function DashboardOverview() {
@@ -67,7 +64,7 @@ export default function DashboardOverview() {
     {
       label: "Balance",
       value: stats
-        ? formatAmount(stats.balance, stats.currency, stats.symbol)
+        ? formatAmount(stats.balance)
         : "—",
       sub: stats?.plan ? `${stats.plan} plan` : "Free plan",
       icon: Wallet,

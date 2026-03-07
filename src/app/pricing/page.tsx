@@ -27,7 +27,7 @@ const PLANS = [
   },
   {
     name: "Pro",
-    price: 1999,
+    price: 23.99,
     desc: "For serious developers",
     features: [
       "Everything in Free",
@@ -43,7 +43,7 @@ const PLANS = [
   },
   {
     name: "Team",
-    price: 4999,
+    price: 59.99,
     desc: "For teams shipping fast",
     features: [
       "Everything in Pro",
@@ -126,7 +126,7 @@ export default function PricingPage() {
               ) : (
                 <>
                   <span className="text-4xl font-bold">
-                    ₹{plan.price.toLocaleString("en-IN")}
+                    ${plan.price.toFixed(2)}
                   </span>
                   <span className="text-foreground-secondary">/month</span>
                 </>
@@ -161,7 +161,7 @@ export default function PricingPage() {
 
       {/* Footer */}
       <footer className="border-t border-border py-8 text-center text-xs text-foreground-secondary">
-        All prices in INR. Billed monthly via Cashfree. Cancel anytime.
+        All prices in USD. Billed monthly. Cancel anytime.
       </footer>
     </div>
   );

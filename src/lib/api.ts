@@ -159,43 +159,25 @@ class ApiClient {
       blockReason: string | null;
       warnings: string[];
       overageActive: boolean;
-      exchangeRates: Record<string, number>;
     }>("/api/billing/quota");
   }
 
   async addCredits(amount: number) {
     return this.post<{
-      orderId: string;
-      paymentSessionId: string;
+      checkoutUrl: string;
       amount: number;
       currency: string;
       symbol: string;
     }>("/api/billing/add-credits", { amount });
   }
 
-  async verifyPayment(params: { orderId: string }) {
-    return this.post<{ success: boolean; paymentId: string }>(
-      "/api/billing/verify-payment",
-      params
-    );
-  }
-
   async subscribe(plan: "starter" | "pro" | "team") {
     return this.post<{
-      subscriptionId: string;
-      paymentSessionId: string;
+      checkoutUrl: string;
       plan: string;
       price: number;
       currency: string;
     }>("/api/billing/subscribe", { plan });
-  }
-
-  async activateSubscription(subscriptionId: string) {
-    return this.post<{
-      success: boolean;
-      status: string;
-      plan?: string;
-    }>("/api/billing/activate-subscription", { subscriptionId });
   }
 
   async getSubscription() {
@@ -216,12 +198,6 @@ class ApiClient {
       success: boolean;
       direction: "upgrade" | "downgrade";
       newPlan: string;
-      immediate: boolean;
-      requiresCheckout?: boolean;
-      subscriptionId?: string;
-      paymentSessionId?: string;
-      price?: number;
-      currency?: string;
     }>("/api/billing/change-plan", { plan });
   }
 
@@ -233,19 +209,8 @@ class ApiClient {
     }>("/api/billing/cancel-subscription", {});
   }
 
-  async resetSubscription() {
-    return this.post<{
-      success: boolean;
-      message: string;
-    }>("/api/billing/reset-subscription", {});
-  }
-
-  async patchCurrency(currency: "USD" | "INR") {
-    return this.patch<{
-      success: boolean;
-      currency: string;
-      balance: number;
-    }>("/api/billing/currency", { currency });
+  async resumeSubscription() {
+    return this.post<{ success: boolean }>("/api/billing/resume-subscription", {});
   }
 
   async getPayments(page = 1, limit = 20) {

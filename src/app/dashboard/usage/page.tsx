@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
-import { BarChart3, Cpu, IndianRupee, Zap } from "lucide-react";
+import { BarChart3, Cpu, DollarSign, Zap } from "lucide-react";
 
 interface UsageSummary {
   period: { start: string; end: string };
@@ -24,8 +24,8 @@ interface DailyUsage {
   requests: number;
 }
 
-function formatINR(paise: number): string {
-  return `₹${(paise / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
+function formatUSD(cents: number): string {
+  return `$${(cents / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
 }
 
 function formatTokens(n: number): string {
@@ -77,10 +77,10 @@ export default function UsagePage() {
         <div className="rounded-xl border border-border bg-card p-5">
           <div className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground">Total Cost</span>
-            <IndianRupee className="h-4 w-4 text-muted-foreground" />
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
           </div>
           <p className="mt-2 text-3xl font-bold">
-            {summary ? formatINR(summary.cost) : "—"}
+            {summary ? formatUSD(summary.cost) : "—"}
           </p>
         </div>
 
@@ -136,7 +136,7 @@ export default function UsagePage() {
                   }}
                 />
                 <div className="pointer-events-none absolute -top-7 left-1/2 hidden -translate-x-1/2 rounded bg-foreground px-2 py-0.5 text-[10px] text-background whitespace-nowrap group-hover:block">
-                  {formatINR(d.cost)}
+                  {formatUSD(d.cost)}
                 </div>
               </div>
             ))}
@@ -179,7 +179,7 @@ export default function UsagePage() {
                       {formatTokens(m.tokens.output)}
                     </td>
                     <td className="px-5 py-3 text-right text-sm font-medium">
-                      {formatINR(m.cost)}
+                      {formatUSD(m.cost)}
                     </td>
                   </tr>
                 ))}
