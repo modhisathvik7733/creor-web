@@ -174,6 +174,7 @@ interface Payment {
   currency: string;
   status: string;
   timeCreated: string;
+  upgrade?: { from: string; to: string };
 }
 
 const CREDIT_PRESETS = [5, 10, 25, 50];
@@ -821,16 +822,24 @@ export default function BillingPage() {
                         ? "bg-blue-500/10 text-blue-500"
                         : p.type === "credits"
                           ? "bg-green-500/10 text-green-500"
-                          : p.type === "subscription"
-                            ? "bg-purple-500/10 text-purple-500"
-                            : "bg-muted text-muted-foreground"
+                          : p.upgrade
+                            ? "bg-orange-500/10 text-orange-500"
+                            : p.type === "subscription"
+                              ? "bg-purple-500/10 text-purple-500"
+                              : "bg-muted text-muted-foreground"
                     }`}
                   >
-                    {p.type === "onboarding" ? "OB" : p.type === "credits" ? "CR" : p.type === "subscription" ? "SB" : "RF"}
+                    {p.type === "onboarding" ? "OB" : p.type === "credits" ? "CR" : p.upgrade ? (
+                      <ArrowUp className="h-3.5 w-3.5" />
+                    ) : p.type === "subscription" ? "SB" : "RF"}
                   </div>
                   <div>
                     <p className="text-sm font-medium capitalize">
-                      {p.type === "onboarding" ? "Onboarding Credits" : p.type}
+                      {p.upgrade
+                        ? `Upgrade · ${p.upgrade.from} → ${p.upgrade.to}`
+                        : p.type === "onboarding"
+                          ? "Onboarding Credits"
+                          : p.type}
                     </p>
                     <p className="text-xs text-muted-foreground">{formatDate(p.timeCreated)}</p>
                   </div>
