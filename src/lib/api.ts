@@ -228,7 +228,7 @@ class ApiClient {
     }>("/api/billing/cancel-subscription", {});
   }
 
-  async patchCurrency(currency: "USD" | "INR" | "EUR") {
+  async patchCurrency(currency: "USD" | "INR") {
     return this.patch<{
       success: boolean;
       currency: string;

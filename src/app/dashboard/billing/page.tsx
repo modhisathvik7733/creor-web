@@ -19,7 +19,7 @@ import {
   XCircle,
 } from "lucide-react";
 
-type SupportedCurrency = "USD" | "INR" | "EUR";
+type SupportedCurrency = "USD" | "INR";
 
 interface QuotaInfo {
   balance: number;
@@ -63,47 +63,44 @@ interface Payment {
 const CURRENCIES: { id: SupportedCurrency; label: string; symbol: string }[] = [
   { id: "USD", label: "US Dollar", symbol: "$" },
   { id: "INR", label: "Indian Rupee", symbol: "₹" },
-  { id: "EUR", label: "Euro", symbol: "€" },
 ];
 
 const CREDIT_PRESETS: Record<SupportedCurrency, number[]> = {
   USD: [5, 10, 25, 50],
   INR: [500, 1000, 2500, 5000],
-  EUR: [5, 10, 25, 50],
 };
 
 const MIN_CREDIT: Record<SupportedCurrency, number> = {
   USD: 1,
   INR: 100,
-  EUR: 1,
 };
 
 const PLAN_DEFS = [
   {
     id: "free",
     name: "Free",
-    prices: { USD: 0, INR: 0, EUR: 0 },
+    prices: { USD: 0, INR: 0 },
     features: ["All models", "$0.50/month included", "Top up anytime"],
     monthlyLimit: 500000,
   },
   {
     id: "starter",
     name: "Starter",
-    prices: { USD: 599, INR: 49900, EUR: 549 },
+    prices: { USD: 599, INR: 49900 },
     features: ["All models", "Email support", "$6/month included", "Top up for overage"],
     monthlyLimit: 6000000,
   },
   {
     id: "pro",
     name: "Pro",
-    prices: { USD: 2399, INR: 199900, EUR: 2199 },
+    prices: { USD: 2399, INR: 199900 },
     features: ["All models", "Priority models", "Priority support", "$24/month included"],
     monthlyLimit: 24000000,
   },
   {
     id: "team",
     name: "Team",
-    prices: { USD: 5999, INR: 499900, EUR: 5499 },
+    prices: { USD: 5999, INR: 499900 },
     features: ["All models", "Priority models", "Dedicated support", "Admin roles", "$60/month included"],
     monthlyLimit: 60000000,
   },
