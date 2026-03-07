@@ -217,6 +217,11 @@ class ApiClient {
       direction: "upgrade" | "downgrade";
       newPlan: string;
       immediate: boolean;
+      requiresCheckout?: boolean;
+      subscriptionId?: string;
+      paymentSessionId?: string;
+      price?: number;
+      currency?: string;
     }>("/api/billing/change-plan", { plan });
   }
 
@@ -226,6 +231,13 @@ class ApiClient {
       message: string;
       endsAt: string | null;
     }>("/api/billing/cancel-subscription", {});
+  }
+
+  async resetSubscription() {
+    return this.post<{
+      success: boolean;
+      message: string;
+    }>("/api/billing/reset-subscription", {});
   }
 
   async patchCurrency(currency: "USD" | "INR") {

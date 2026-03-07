@@ -320,7 +320,23 @@ export default function BillingPage() {
     setChangingPlan(true);
     setError(null);
     try {
-      await api.changePlan(planId);
+      const result = await api.changePlan(planId);
+
+      if (result.requiresCheckout && result.paymentSessionId) {
+        // Upgrade requires a new subscription checkout (new mandate at higher price)
+        localStorage.setItem("creor_pending_subscription", result.subscriptionId ?? "");
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const cashfree = new (window as any).Cashfree({
+          mode: process.env.NEXT_PUBLIC_CASHFREE_ENV === "sandbox" ? "sandbox" : "production",
+        });
+        cashfree.subscriptionsCheckout({
+          subsSessionId: result.paymentSessionId,
+          redirectTarget: "_self",
+        });
+        return; // page will redirect
+      }
+
+      // Downgrade — no checkout needed
       setPaymentSuccess(true);
       await fetchData();
     } catch (err) {
@@ -616,12 +632,28 @@ export default function BillingPage() {
               : "Free tier"}
           </p>
           {subscription?.active && (
-            <button
-              onClick={() => setConfirmAction({ type: "cancel" })}
-              className="mt-2 text-xs text-red-500/70 hover:text-red-500"
-            >
-              Cancel subscription
-            </button>
+            <div className="mt-2 flex items-center gap-3">
+              <button
+                onClick={() => setConfirmAction({ type: "cancel" })}
+                className="text-xs text-red-500/70 hover:text-red-500"
+              >
+                Cancel subscription
+              </button>
+              <button
+                onClick={async () => {
+                  if (!confirm("DEV: Reset subscription? This removes it so you can re-subscribe.")) return;
+                  try {
+                    await api.resetSubscription();
+                    await fetchData();
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : "Reset failed");
+                  }
+                }}
+                className="text-xs text-yellow-500/70 hover:text-yellow-500"
+              >
+                Reset (Dev)
+              </button>
+            </div>
           )}
         </div>
       </div>
