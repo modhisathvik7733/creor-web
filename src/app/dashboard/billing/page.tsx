@@ -234,6 +234,7 @@ export default function BillingPage() {
     plan?: string;
   } | null>(null);
   const [changingPlan, setChangingPlan] = useState(false);
+  const [subscribingPlan, setSubscribingPlan] = useState<string | null>(null);
   const [resetting, setResetting] = useState(false);
   const [expandedPayment, setExpandedPayment] = useState<string | null>(null);
 
@@ -376,7 +377,7 @@ export default function BillingPage() {
     setAddingCredits(true);
     try {
       const result = await api.addCredits(creditAmount);
-      window.location.href = result.checkoutUrl;
+      window.open(result.checkoutUrl, "_blank");
     } catch {
       pushToast({
         variant: "error",
@@ -390,15 +391,18 @@ export default function BillingPage() {
 
   // ── Subscribe (new subscription) ──
   const handleSubscribe = async (planId: "starter" | "pro" | "team") => {
+    setSubscribingPlan(planId);
     try {
       const result = await api.subscribe(planId);
-      window.location.href = result.checkoutUrl;
+      window.open(result.checkoutUrl, "_blank");
     } catch (err) {
       pushToast({
         variant: "error",
         title: "Subscription failed",
         description: err instanceof Error ? err.message : "Failed to create subscription.",
       });
+    } finally {
+      setSubscribingPlan(null);
     }
   };
 
@@ -586,14 +590,14 @@ export default function BillingPage() {
             <div className="mt-4 flex gap-3">
               <button
                 onClick={() => setConfirmAction(null)}
-                className="flex-1 rounded-lg border border-border py-2 text-sm font-medium transition-colors hover:bg-muted"
+                className="flex-1 cursor-pointer rounded-lg border border-border py-2 text-sm font-medium transition-colors hover:bg-muted"
               >
                 {confirmAction.type === "reset" ? "Cancel" : "Keep Current"}
               </button>
               <button
                 onClick={confirmAction.type === "reset" ? handleResetBilling : confirmAction.type === "cancel" ? handleCancelSubscription : confirmDowngrade}
                 disabled={changingPlan || resetting}
-                className="flex-1 rounded-lg bg-red-500 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                className="flex-1 cursor-pointer rounded-lg bg-red-500 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
               >
                 {changingPlan || resetting ? "Processing..." : confirmAction.type === "reset" ? "Reset Everything" : confirmAction.type === "cancel" ? "Cancel" : "Downgrade"}
               </button>
@@ -673,7 +677,7 @@ export default function BillingPage() {
           {subscription?.active && !subscription.graceUntil && (
             <button
               onClick={() => setConfirmAction({ type: "cancel" })}
-              className="mt-2 text-xs text-red-500/70 hover:text-red-500"
+              className="mt-2 cursor-pointer text-xs text-red-500/70 hover:text-red-500"
             >
               Cancel subscription
             </button>
@@ -704,7 +708,7 @@ export default function BillingPage() {
               <button
                 key={amount}
                 onClick={() => setCreditAmount(amount)}
-                className={`rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${
+                className={`cursor-pointer rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${
                   creditAmount === amount
                     ? "border-foreground bg-foreground text-background"
                     : "border-border hover:bg-muted"
@@ -717,7 +721,7 @@ export default function BillingPage() {
           <button
             onClick={handleAddCredits}
             disabled={addingCredits || creditAmount < MIN_CREDIT}
-            className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+            className="flex cursor-pointer items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
           >
             <Plus className="h-3.5 w-3.5" />
             {addingCredits ? "Processing..." : "Add Credits"}
@@ -786,7 +790,7 @@ export default function BillingPage() {
                   <button
                     onClick={handleCancelPendingChange}
                     disabled={changingPlan}
-                    className="mt-5 flex w-full items-center justify-center gap-1.5 rounded-lg border border-blue-500/30 py-2.5 text-sm font-medium text-blue-400 transition-colors hover:bg-blue-500/10 disabled:opacity-50"
+                    className="mt-5 flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-blue-500/30 py-2.5 text-sm font-medium text-blue-400 transition-colors hover:bg-blue-500/10 disabled:opacity-50"
                   >
                     <X className="h-3.5 w-3.5" /> Cancel Downgrade
                   </button>
@@ -794,14 +798,19 @@ export default function BillingPage() {
                 {!isCurrent && !isFree && !isPending && (
                   <button
                     onClick={() => handleChangePlan(plan.id as "starter" | "pro" | "team")}
-                    disabled={changingPlan || !!subscription?.pendingPlan}
-                    className={`mt-5 flex w-full items-center justify-center gap-1.5 rounded-lg py-2.5 text-sm font-medium transition-colors disabled:opacity-50 ${
+                    disabled={changingPlan || !!subscription?.pendingPlan || subscribingPlan === plan.id}
+                    className={`mt-5 flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg py-2.5 text-sm font-medium transition-colors disabled:opacity-50 ${
                       isUpgrade
                         ? "bg-foreground text-background hover:opacity-90"
                         : "border border-border hover:bg-muted"
                     }`}
                   >
-                    {!subscription?.active ? (
+                    {subscribingPlan === plan.id ? (
+                      <span className="flex items-center gap-2">
+                        <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                        Loading...
+                      </span>
+                    ) : !subscription?.active ? (
                       "Subscribe"
                     ) : isUpgrade ? (
                       <>
@@ -972,7 +981,7 @@ export default function BillingPage() {
           <button
             onClick={() => setConfirmAction({ type: "reset" })}
             disabled={resetting}
-            className="flex items-center gap-1.5 rounded-lg border border-red-500/30 px-4 py-2 text-sm font-medium text-red-400 transition-colors hover:bg-red-500/10 disabled:opacity-50"
+            className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-red-500/30 px-4 py-2 text-sm font-medium text-red-400 transition-colors hover:bg-red-500/10 disabled:opacity-50"
           >
             <RotateCcw className="h-3.5 w-3.5" />
             {resetting ? "Resetting..." : "Reset"}
