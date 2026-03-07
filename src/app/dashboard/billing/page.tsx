@@ -18,6 +18,7 @@ import {
   Info,
   AlertTriangle,
   XCircle,
+  ChevronDown,
 } from "lucide-react";
 
 // ── Toast System ──
@@ -234,6 +235,7 @@ export default function BillingPage() {
   } | null>(null);
   const [changingPlan, setChangingPlan] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [expandedPayment, setExpandedPayment] = useState<string | null>(null);
 
   const { toasts, push: pushToast, dismiss: dismissToast } = useToasts();
 
@@ -843,53 +845,118 @@ export default function BillingPage() {
             <p className="text-sm">No payments yet</p>
           </div>
         ) : (
-          <div className="divide-y divide-border">
-            {payments.map((p) => (
-              <div key={p.id} className="flex items-center justify-between px-5 py-3">
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-medium ${
-                      p.type === "onboarding"
-                        ? "bg-blue-500/10 text-blue-500"
-                        : p.type === "credits"
-                          ? "bg-green-500/10 text-green-500"
-                          : p.upgrade
-                            ? "bg-orange-500/10 text-orange-500"
-                            : p.type === "subscription"
-                              ? "bg-purple-500/10 text-purple-500"
-                              : "bg-muted text-muted-foreground"
-                    }`}
-                  >
-                    {p.type === "onboarding" ? "OB" : p.type === "credits" ? "CR" : p.upgrade ? (
-                      <ArrowUp className="h-3.5 w-3.5" />
-                    ) : p.type === "subscription" ? "SB" : "RF"}
+          <>
+            {/* Table header */}
+            <div className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-4 border-b border-border px-5 py-2.5 text-xs font-medium text-muted-foreground sm:grid-cols-[1fr_100px_100px_100px_100px]">
+              <span>Date</span>
+              <span className="hidden sm:block">Type</span>
+              <span>Status</span>
+              <span className="text-right">Amount</span>
+              <span className="w-6" />
+            </div>
+
+            {/* Table rows */}
+            <div className="divide-y divide-border">
+              {payments.map((p) => {
+                const isExpanded = expandedPayment === p.id;
+                const statusColor =
+                  p.status === "captured"
+                    ? "bg-green-500/10 text-green-500"
+                    : p.status === "failed"
+                      ? "bg-red-500/10 text-red-500"
+                      : p.status === "refunded"
+                        ? "bg-amber-500/10 text-amber-500"
+                        : "bg-muted text-muted-foreground";
+
+                const productLabel = p.upgrade
+                  ? `Upgrade · ${p.upgrade.from} → ${p.upgrade.to}`
+                  : p.type === "onboarding"
+                    ? "Onboarding Credits"
+                    : p.type === "credits"
+                      ? "Credits Top-Up"
+                      : p.type === "subscription"
+                        ? "Monthly Subscription"
+                        : p.type === "refund"
+                          ? "Refund"
+                          : p.type;
+
+                return (
+                  <div key={p.id}>
+                    {/* Row */}
+                    <button
+                      onClick={() => setExpandedPayment(isExpanded ? null : p.id)}
+                      className="grid w-full grid-cols-[1fr_auto_auto_auto] items-center gap-4 px-5 py-3.5 text-left transition-colors hover:bg-muted/50 sm:grid-cols-[1fr_100px_100px_100px_100px]"
+                    >
+                      <span className="text-sm">{formatDate(p.timeCreated)}</span>
+                      <span className="hidden text-sm text-muted-foreground capitalize sm:block">
+                        {p.type}
+                      </span>
+                      <span>
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${statusColor}`}>
+                          {p.status === "captured" && <CheckCircle2 className="h-3 w-3" />}
+                          {p.status === "captured" ? "Paid" : p.status.charAt(0).toUpperCase() + p.status.slice(1)}
+                        </span>
+                      </span>
+                      <span className="text-right text-sm font-medium">
+                        ${p.amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                      <span className="flex justify-end">
+                        <ChevronDown
+                          className={`h-4 w-4 text-muted-foreground transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                        />
+                      </span>
+                    </button>
+
+                    {/* Expanded detail */}
+                    {isExpanded && (
+                      <div className="border-t border-border bg-muted/30 px-5 py-4">
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div className="space-y-2.5">
+                            <div>
+                              <p className="text-xs text-muted-foreground">Product</p>
+                              <p className="text-sm font-medium capitalize">{productLabel}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground">Date</p>
+                              <p className="text-sm">{new Date(p.timeCreated).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground">Transaction ID</p>
+                              <p className="font-mono text-xs text-muted-foreground">{p.id}</p>
+                            </div>
+                          </div>
+                          <div className="space-y-2.5">
+                            <div>
+                              <p className="text-xs text-muted-foreground">Amount</p>
+                              <p className="text-sm font-medium">
+                                ${p.amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {p.currency}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground">Status</p>
+                              <p className={`text-sm capitalize ${p.status === "captured" ? "text-green-500" : p.status === "failed" ? "text-red-500" : "text-muted-foreground"}`}>
+                                {p.status === "captured" ? "Paid" : p.status}
+                              </p>
+                            </div>
+                            {p.upgrade && (
+                              <div>
+                                <p className="text-xs text-muted-foreground">Plan Change</p>
+                                <p className="text-sm">
+                                  <span className="capitalize">{p.upgrade.from}</span>
+                                  {" → "}
+                                  <span className="font-medium capitalize">{p.upgrade.to}</span>
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <div>
-                    <p className="text-sm font-medium capitalize">
-                      {p.upgrade
-                        ? `Upgrade · ${p.upgrade.from} → ${p.upgrade.to}`
-                        : p.type === "onboarding"
-                          ? "Onboarding Credits"
-                          : p.type}
-                    </p>
-                    <p className="text-xs text-muted-foreground">{formatDate(p.timeCreated)}</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm font-medium">
-                    ${p.amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </p>
-                  <p
-                    className={`text-xs capitalize ${
-                      p.status === "captured" ? "text-green-500" : p.status === "failed" ? "text-red-500" : "text-muted-foreground"
-                    }`}
-                  >
-                    {p.status}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
+                );
+              })}
+            </div>
+          </>
         )}
       </div>
 
