@@ -16,15 +16,6 @@ import {
   RotateCcw,
 } from "lucide-react";
 
-declare global {
-  interface Window {
-    createLemonSqueezy?: () => void;
-    LemonSqueezy?: {
-      Url: { Open: (url: string) => void };
-    };
-  }
-}
-
 interface QuotaInfo {
   balance: number;
   currency: string;
@@ -122,29 +113,6 @@ export default function BillingPage() {
 
   const currentPlanId = subscription?.active ? subscription.plan : "free";
 
-  // Load Lemon Squeezy JS
-  useEffect(() => {
-    if (document.querySelector('script[src*="lemonsqueezy"]')) return;
-    const script = document.createElement("script");
-    script.src = "https://assets.lemonsqueezy.com/lemon.js";
-    script.defer = true;
-    script.onload = () => window.createLemonSqueezy?.();
-    document.body.appendChild(script);
-  }, []);
-
-  // Listen for LS checkout success events
-  useEffect(() => {
-    const handler = (event: MessageEvent) => {
-      if (event.data?.event === "Checkout.Success") {
-        setPaymentSuccess(true);
-        fetchData();
-      }
-    };
-    window.addEventListener("message", handler);
-    return () => window.removeEventListener("message", handler);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const fetchData = useCallback(async () => {
     try {
       const [q, s, p] = await Promise.all([
@@ -186,11 +154,7 @@ export default function BillingPage() {
     setError(null);
     try {
       const result = await api.addCredits(creditAmount);
-      if (window.LemonSqueezy) {
-        window.LemonSqueezy.Url.Open(result.checkoutUrl);
-      } else {
-        window.open(result.checkoutUrl, "_blank");
-      }
+      window.location.href = result.checkoutUrl;
     } catch {
       setError("Failed to create checkout. Please try again.");
     } finally {
@@ -203,11 +167,7 @@ export default function BillingPage() {
     setError(null);
     try {
       const result = await api.subscribe(planId);
-      if (window.LemonSqueezy) {
-        window.LemonSqueezy.Url.Open(result.checkoutUrl);
-      } else {
-        window.open(result.checkoutUrl, "_blank");
-      }
+      window.location.href = result.checkoutUrl;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create subscription.");
     }
