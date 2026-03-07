@@ -8,9 +8,7 @@ import {
   Zap,
   AlertCircle,
   CheckCircle2,
-  Wallet,
   Clock,
-  Receipt,
   ArrowUp,
   ArrowDown,
   RotateCcw,
@@ -19,6 +17,8 @@ import {
   AlertTriangle,
   XCircle,
   ChevronDown,
+  ExternalLink,
+  Check,
 } from "lucide-react";
 
 // ── Toast System ──
@@ -59,7 +59,6 @@ function useToasts() {
     [dismiss],
   );
 
-  // Cleanup on unmount
   useEffect(() => {
     const timers = timersRef.current;
     return () => {
@@ -166,6 +165,10 @@ interface Subscription {
   graceUntil?: string | null;
   pendingPlan?: string | null;
   pendingPlanEffectiveAt?: string | null;
+  cardBrand?: string | null;
+  cardLastFour?: string | null;
+  updatePaymentUrl?: string | null;
+  renewsAt?: string | null;
 }
 
 interface Payment {
@@ -208,6 +211,8 @@ const PLAN_DEFS = [
   },
 ];
 
+const ANNUAL_DISCOUNT = 0.20;
+
 function formatCurrency(amount: number): string {
   return `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
@@ -237,10 +242,11 @@ export default function BillingPage() {
   const [subscribingPlan, setSubscribingPlan] = useState<string | null>(null);
   const [resetting, setResetting] = useState(false);
   const [expandedPayment, setExpandedPayment] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"billing" | "invoices">("billing");
+  const [showPlanModal, setShowPlanModal] = useState(false);
+  const [billingPeriod, setBillingPeriod] = useState<"monthly" | "annual">("monthly");
 
   const { toasts, push: pushToast, dismiss: dismissToast } = useToasts();
-
-  // Track which warning toasts we already showed so we don't re-fire on every render
   const shownWarningsRef = useRef<Set<string>>(new Set());
 
   const currentPlanId = subscription?.active ? subscription.plan : "free";
@@ -275,20 +281,17 @@ export default function BillingPage() {
         title: "Payment successful!",
         description: "Your account has been updated.",
       });
-      // Clean URL
       window.history.replaceState({}, "", window.location.pathname);
-      // Refresh data (webhook may take a moment)
       const timer = setTimeout(() => fetchData(), 2000);
       return () => clearTimeout(timer);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Show warning/info toasts when quota data loads — fire once per warning type
+  // Warning toasts
   useEffect(() => {
     if (!quota) return;
 
-    // using_credits warning
     if (quota.warnings.includes("using_credits") && !shownWarningsRef.current.has("using_credits")) {
       shownWarningsRef.current.add("using_credits");
       pushToast({
@@ -298,7 +301,6 @@ export default function BillingPage() {
       });
     }
 
-    // monthly_approaching warning
     if (quota.warnings.includes("monthly_approaching") && !shownWarningsRef.current.has("monthly_approaching")) {
       shownWarningsRef.current.add("monthly_approaching");
       const resetMsg = quota.monthly.resetsAt ? formatDate(quota.monthly.resetsAt) : "next month";
@@ -310,7 +312,6 @@ export default function BillingPage() {
       });
     }
 
-    // blocked
     if (!quota.canSend && !shownWarningsRef.current.has("blocked")) {
       shownWarningsRef.current.add("blocked");
       const blockTitle =
@@ -372,7 +373,19 @@ export default function BillingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subscription]);
 
-  // ── Add Credits ──
+  // Close modal on Escape
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && showPlanModal) {
+        setShowPlanModal(false);
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [showPlanModal]);
+
+  // ── Handlers ──
+
   const handleAddCredits = async () => {
     setAddingCredits(true);
     try {
@@ -389,7 +402,6 @@ export default function BillingPage() {
     }
   };
 
-  // ── Subscribe (new subscription) ──
   const handleSubscribe = async (planId: "starter" | "pro" | "team") => {
     setSubscribingPlan(planId);
     try {
@@ -406,7 +418,6 @@ export default function BillingPage() {
     }
   };
 
-  // ── Change Plan (upgrade/downgrade) ──
   const handleChangePlan = async (planId: "starter" | "pro" | "team") => {
     if (!subscription?.active) {
       handleSubscribe(planId);
@@ -422,7 +433,6 @@ export default function BillingPage() {
       return;
     }
 
-    // Upgrade — direct API call, no new checkout needed
     setChangingPlan(true);
     try {
       await api.changePlan(planId);
@@ -431,6 +441,7 @@ export default function BillingPage() {
         title: "Plan upgraded!",
         description: "Your account has been updated.",
       });
+      setShowPlanModal(false);
       await fetchData();
     } catch (err) {
       pushToast({
@@ -457,6 +468,7 @@ export default function BillingPage() {
           ? `Takes effect on ${formatDate(result.effectiveAt)}.`
           : "Takes effect at end of billing cycle.",
       });
+      setShowPlanModal(false);
       await fetchData();
     } catch (err) {
       pushToast({
@@ -469,7 +481,6 @@ export default function BillingPage() {
     }
   };
 
-  // ── Cancel Pending Plan Change ──
   const handleCancelPendingChange = async () => {
     setChangingPlan(true);
     try {
@@ -487,7 +498,6 @@ export default function BillingPage() {
     }
   };
 
-  // ── Cancel Subscription ──
   const handleCancelSubscription = async () => {
     setChangingPlan(true);
     setConfirmAction(null);
@@ -505,7 +515,6 @@ export default function BillingPage() {
     }
   };
 
-  // ── Resume Subscription ──
   const handleResumeSubscription = async () => {
     setChangingPlan(true);
     try {
@@ -522,7 +531,6 @@ export default function BillingPage() {
     }
   };
 
-  // ── Reset Billing (Test Only) ──
   const handleResetBilling = async () => {
     setResetting(true);
     setConfirmAction(null);
@@ -558,14 +566,13 @@ export default function BillingPage() {
 
   return (
     <div className="p-8">
-      {/* Toast Notifications */}
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
 
       {/* Header */}
-      <div className="mb-8">
+      <div className="mb-6">
         <h1 className="text-2xl font-bold tracking-tight">Billing</h1>
-        <p className="mt-1 text-muted-foreground">
-          Manage your plan and credits
+        <p className="mt-1 text-sm text-muted-foreground">
+          Manage your plan, credits, and invoices
         </p>
       </div>
 
@@ -606,370 +613,546 @@ export default function BillingPage() {
         </div>
       )}
 
-      {/* Usage, Credits & Plan Cards */}
-      <div className="mb-8 grid gap-4 sm:grid-cols-3">
-        {/* Usage Card */}
-        <div className="rounded-xl border border-border bg-card p-5">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Monthly Usage</span>
-            <Zap className="h-4 w-4 text-muted-foreground" />
-          </div>
-          <p className="mt-2 text-3xl font-bold">
-            {quota ? formatCurrency(quota.monthly.current) : "—"}
-          </p>
-          {quota?.monthly.max !== null && quota?.monthly.max !== undefined ? (
-            <>
-              <div className="mt-2 h-1.5 w-full rounded-full bg-muted">
-                <div
-                  className={`h-1.5 rounded-full transition-all ${
-                    quota?.overageActive
-                      ? "bg-orange-500"
-                      : (monthlyPct ?? 0) >= 90
-                        ? "bg-red-500"
-                        : (monthlyPct ?? 0) >= 70
-                          ? "bg-amber-500"
-                          : "bg-green-500"
-                  }`}
-                  style={{ width: `${Math.min(monthlyPct ?? 0, 100)}%` }}
-                />
-              </div>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {formatCurrency(quota!.monthly.current)} / {formatCurrency(quota!.monthly.max)}
-                {quota?.overageActive && <span className="text-orange-500"> (overage)</span>}
-                {quota!.monthly.resetsAt && <> · Resets {formatDate(quota!.monthly.resetsAt)}</>}
-              </p>
-            </>
-          ) : (
-            <p className="mt-1 text-xs text-muted-foreground">No limit</p>
-          )}
-        </div>
-
-        {/* Credits Card */}
-        <div className="rounded-xl border border-border bg-card p-5">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Top-Up Credits</span>
-            <Wallet className="h-4 w-4 text-muted-foreground" />
-          </div>
-          <p className="mt-2 text-3xl font-bold">
-            {quota ? formatCurrency(quota.balance) : "—"}
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Used for overage beyond plan allowance
-          </p>
-        </div>
-
-        {/* Plan Card */}
-        <div className="rounded-xl border border-border bg-card p-5">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Current Plan</span>
-            <CreditCard className="h-4 w-4 text-muted-foreground" />
-          </div>
-          <p className="mt-2 text-3xl font-bold capitalize">
-            {subscription?.active
-              ? subscription.planName ?? subscription.plan
-              : quota?.plan?.name ?? "Free"}
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {subscription?.active && subscription.price
-              ? `$${subscription.price}/month`
-              : "Free tier"}
-          </p>
-          {subscription?.active && !subscription.graceUntil && (
-            <button
-              onClick={() => setConfirmAction({ type: "cancel" })}
-              className="mt-2 cursor-pointer text-xs text-red-500/70 hover:text-red-500"
-            >
-              Cancel subscription
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Add Credits */}
-      <div className="mb-8 rounded-xl border border-border bg-card p-5">
-        <h2 className="font-semibold">Add Credits</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Top up credits for overage beyond your plan allowance
-        </p>
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-1 rounded-lg border border-border px-3 py-2">
-            <span className="text-sm text-muted-foreground">$</span>
-            <input
-              type="number"
-              value={creditAmount}
-              onChange={(e) => setCreditAmount(Number(e.target.value))}
-              min={MIN_CREDIT}
-              step={1}
-              className="w-24 bg-transparent text-sm outline-none"
-            />
-          </div>
-          <div className="flex gap-2">
-            {CREDIT_PRESETS.map((amount) => (
+      {/* Adjust Plan Modal */}
+      {showPlanModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowPlanModal(false);
+          }}
+        >
+          <div className="w-full max-w-3xl rounded-xl border border-border bg-card p-6 shadow-xl">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Adjust your plan</h2>
               <button
-                key={amount}
-                onClick={() => setCreditAmount(amount)}
-                className={`cursor-pointer rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${
-                  creditAmount === amount
-                    ? "border-foreground bg-foreground text-background"
-                    : "border-border hover:bg-muted"
-                }`}
+                onClick={() => setShowPlanModal(false)}
+                className="cursor-pointer rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
-                ${amount}
+                <X className="h-4 w-4" />
               </button>
-            ))}
-          </div>
-          <button
-            onClick={handleAddCredits}
-            disabled={addingCredits || creditAmount < MIN_CREDIT}
-            className="flex cursor-pointer items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            {addingCredits ? "Processing..." : "Add Credits"}
-          </button>
-        </div>
-      </div>
-
-      {/* Plan Cards */}
-      <div className="mb-8">
-        <h2 className="mb-4 font-semibold">Plans</h2>
-        <div className="grid gap-4 sm:grid-cols-4">
-          {PLAN_DEFS.map((plan) => {
-            const isCurrent = plan.id === currentPlanId;
-            const isPending = subscription?.pendingPlan === plan.id;
-            const currentIdx = PLAN_DEFS.findIndex((p) => p.id === currentPlanId);
-            const planIdx = PLAN_DEFS.findIndex((p) => p.id === plan.id);
-            const isUpgrade = planIdx > currentIdx;
-            const isDowngrade = planIdx < currentIdx && planIdx > 0;
-            const isFree = plan.id === "free";
-
-            return (
-              <div
-                key={plan.id}
-                className={`rounded-xl border p-5 transition-colors ${
-                  isCurrent
-                    ? "border-border/80 bg-card ring-1 ring-foreground/[0.08]"
-                    : "border-border bg-card"
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <h3 className="font-semibold">{plan.name}</h3>
-                  {isCurrent && (
-                    <span className="rounded-full bg-foreground/[0.07] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                      Current
-                    </span>
-                  )}
-                  {isPending && (
-                    <span className="rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-medium tracking-wide text-blue-500">
-                      {subscription?.pendingPlanEffectiveAt
-                        ? `From ${formatDate(subscription.pendingPlanEffectiveAt)}`
-                        : "Pending"}
-                    </span>
-                  )}
-                </div>
-                <p className="mt-2">
-                  {isFree ? (
-                    <span className="text-3xl font-bold">Free</span>
-                  ) : (
-                    <>
-                      <span className="text-3xl font-bold">
-                        ${plan.price.toFixed(2)}
-                      </span>
-                      <span className="text-sm text-muted-foreground">/month</span>
-                    </>
-                  )}
-                </p>
-                <ul className="mt-4 space-y-2">
-                  {plan.features.map((f) => (
-                    <li key={f} className="flex items-start gap-2 text-sm text-muted-foreground">
-                      <span className="mt-0.5 text-foreground">·</span>
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-                {!isCurrent && !isFree && isPending && (
-                  <button
-                    onClick={handleCancelPendingChange}
-                    disabled={changingPlan}
-                    className="mt-5 flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-blue-500/30 py-2.5 text-sm font-medium text-blue-400 transition-colors hover:bg-blue-500/10 disabled:opacity-50"
-                  >
-                    <X className="h-3.5 w-3.5" /> Cancel Downgrade
-                  </button>
-                )}
-                {!isCurrent && !isFree && !isPending && (
-                  <button
-                    onClick={() => handleChangePlan(plan.id as "starter" | "pro" | "team")}
-                    disabled={changingPlan || !!subscription?.pendingPlan || subscribingPlan === plan.id}
-                    className={`mt-5 flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg py-2.5 text-sm font-medium transition-colors disabled:opacity-50 ${
-                      isUpgrade
-                        ? "bg-foreground text-background hover:opacity-90"
-                        : "border border-border hover:bg-muted"
-                    }`}
-                  >
-                    {subscribingPlan === plan.id ? (
-                      <span className="flex items-center gap-2">
-                        <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                        Loading...
-                      </span>
-                    ) : !subscription?.active ? (
-                      "Subscribe"
-                    ) : isUpgrade ? (
-                      <>
-                        <ArrowUp className="h-3.5 w-3.5" /> Upgrade
-                      </>
-                    ) : isDowngrade ? (
-                      <>
-                        <ArrowDown className="h-3.5 w-3.5" /> Downgrade
-                      </>
-                    ) : (
-                      "Subscribe"
-                    )}
-                  </button>
-                )}
-                {isCurrent && !isFree && (
-                  <div className="mt-5 flex w-full items-center justify-center rounded-lg border border-border py-2.5 text-sm font-medium text-muted-foreground">
-                    Current Plan
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-        <p className="mt-4 flex items-center gap-1.5 text-xs text-muted-foreground">
-          <AlertCircle className="h-3 w-3" />
-          Upgrades are immediate with prorated billing. Downgrades take effect at cycle end. All prices in USD.
-        </p>
-      </div>
-
-      {/* Payment History */}
-      <div className="rounded-xl border border-border bg-card">
-        <div className="flex items-center justify-between border-b border-border px-5 py-4">
-          <div className="flex items-center gap-2">
-            <Receipt className="h-4 w-4 text-muted-foreground" />
-            <h2 className="font-semibold">Payment History</h2>
-          </div>
-        </div>
-        {payments.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
-            <Clock className="mb-2 h-6 w-6" />
-            <p className="text-sm">No payments yet</p>
-          </div>
-        ) : (
-          <>
-            {/* Table header */}
-            <div className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-4 border-b border-border px-5 py-2.5 text-xs font-medium text-muted-foreground sm:grid-cols-[1fr_100px_100px_100px_100px]">
-              <span>Date</span>
-              <span className="hidden sm:block">Type</span>
-              <span>Status</span>
-              <span className="text-right">Amount</span>
-              <span className="w-6" />
             </div>
 
-            {/* Table rows */}
-            <div className="divide-y divide-border">
-              {payments.map((p) => {
-                const isExpanded = expandedPayment === p.id;
-                const statusColor =
-                  p.status === "captured"
-                    ? "bg-green-500/10 text-green-500"
-                    : p.status === "failed"
-                      ? "bg-red-500/10 text-red-500"
-                      : p.status === "refunded"
-                        ? "bg-amber-500/10 text-amber-500"
-                        : "bg-muted text-muted-foreground";
+            {/* Billing Period Toggle */}
+            <div className="mt-5 flex justify-center">
+              <div className="inline-flex rounded-lg border border-border p-0.5">
+                <button
+                  onClick={() => setBillingPeriod("monthly")}
+                  className={`cursor-pointer rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
+                    billingPeriod === "monthly"
+                      ? "bg-foreground text-background"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Monthly
+                </button>
+                <button
+                  onClick={() => setBillingPeriod("annual")}
+                  className={`cursor-pointer rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
+                    billingPeriod === "annual"
+                      ? "bg-foreground text-background"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Annual
+                  <span className="ml-1.5 rounded-full bg-green-500/10 px-1.5 py-0.5 text-[10px] font-medium text-green-500">
+                    20% off
+                  </span>
+                </button>
+              </div>
+            </div>
 
-                const productLabel = p.upgrade
-                  ? `Upgrade · ${p.upgrade.from} → ${p.upgrade.to}`
-                  : p.type === "onboarding"
-                    ? "Onboarding Credits"
-                    : p.type === "credits"
-                      ? "Credits Top-Up"
-                      : p.type === "subscription"
-                        ? "Monthly Subscription"
-                        : p.type === "refund"
-                          ? "Refund"
-                          : p.type;
+            {/* Plan Cards */}
+            <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {PLAN_DEFS.map((plan) => {
+                const isCurrent = plan.id === currentPlanId;
+                const isPending = subscription?.pendingPlan === plan.id;
+                const currentIdx = PLAN_DEFS.findIndex((p) => p.id === currentPlanId);
+                const planIdx = PLAN_DEFS.findIndex((p) => p.id === plan.id);
+                const isUpgrade = planIdx > currentIdx;
+                const isDowngrade = planIdx < currentIdx && planIdx > 0;
+                const isFree = plan.id === "free";
+                const isAnnual = billingPeriod === "annual";
+                const displayPrice = isAnnual && plan.price > 0
+                  ? +(plan.price * (1 - ANNUAL_DISCOUNT)).toFixed(2)
+                  : plan.price;
 
                 return (
-                  <div key={p.id}>
-                    {/* Row */}
-                    <button
-                      onClick={() => setExpandedPayment(isExpanded ? null : p.id)}
-                      className="grid w-full grid-cols-[1fr_auto_auto_auto] items-center gap-4 px-5 py-3.5 text-left transition-colors hover:bg-muted/50 sm:grid-cols-[1fr_100px_100px_100px_100px]"
-                    >
-                      <span className="text-sm">{formatDate(p.timeCreated)}</span>
-                      <span className="hidden text-sm text-muted-foreground capitalize sm:block">
-                        {p.type}
-                      </span>
-                      <span>
-                        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${statusColor}`}>
-                          {p.status === "captured" && <CheckCircle2 className="h-3 w-3" />}
-                          {p.status === "captured" ? "Paid" : p.status.charAt(0).toUpperCase() + p.status.slice(1)}
+                  <div
+                    key={plan.id}
+                    className={`rounded-xl border p-4 transition-colors ${
+                      isCurrent
+                        ? "border-foreground/20 bg-foreground/[0.03] ring-1 ring-foreground/[0.08]"
+                        : "border-border bg-card"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold">{plan.name}</h3>
+                      {isCurrent && (
+                        <span className="rounded-full bg-foreground/[0.07] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                          Current
                         </span>
-                      </span>
-                      <span className="text-right text-sm font-medium">
-                        ${p.amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </span>
-                      <span className="flex justify-end">
-                        <ChevronDown
-                          className={`h-4 w-4 text-muted-foreground transition-transform ${isExpanded ? "rotate-180" : ""}`}
-                        />
-                      </span>
-                    </button>
+                      )}
+                      {isPending && (
+                        <span className="rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-medium tracking-wide text-blue-500">
+                          Pending
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-2">
+                      {isFree ? (
+                        <span className="text-2xl font-bold">Free</span>
+                      ) : (
+                        <>
+                          <span className="text-2xl font-bold">
+                            ${displayPrice.toFixed(2)}
+                          </span>
+                          <span className="text-xs text-muted-foreground">/mo</span>
+                          {isAnnual && (
+                            <span className="ml-1 text-[10px] text-muted-foreground">billed annually</span>
+                          )}
+                        </>
+                      )}
+                    </p>
+                    <ul className="mt-3 space-y-1.5">
+                      {plan.features.map((f) => (
+                        <li key={f} className="flex items-start gap-2 text-xs text-muted-foreground">
+                          <Check className="mt-0.5 h-3 w-3 shrink-0 text-foreground/50" />
+                          {f}
+                        </li>
+                      ))}
+                    </ul>
 
-                    {/* Expanded detail */}
-                    {isExpanded && (
-                      <div className="border-t border-border bg-muted/30 px-5 py-4">
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          <div className="space-y-2.5">
-                            <div>
-                              <p className="text-xs text-muted-foreground">Product</p>
-                              <p className="text-sm font-medium capitalize">{productLabel}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-muted-foreground">Date</p>
-                              <p className="text-sm">{new Date(p.timeCreated).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-muted-foreground">Transaction ID</p>
-                              <p className="font-mono text-xs text-muted-foreground">{p.id}</p>
-                            </div>
-                          </div>
-                          <div className="space-y-2.5">
-                            <div>
-                              <p className="text-xs text-muted-foreground">Amount</p>
-                              <p className="text-sm font-medium">
-                                ${p.amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {p.currency}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-muted-foreground">Status</p>
-                              <p className={`text-sm capitalize ${p.status === "captured" ? "text-green-500" : p.status === "failed" ? "text-red-500" : "text-muted-foreground"}`}>
-                                {p.status === "captured" ? "Paid" : p.status}
-                              </p>
-                            </div>
-                            {p.upgrade && (
-                              <div>
-                                <p className="text-xs text-muted-foreground">Plan Change</p>
-                                <p className="text-sm">
-                                  <span className="capitalize">{p.upgrade.from}</span>
-                                  {" → "}
-                                  <span className="font-medium capitalize">{p.upgrade.to}</span>
-                                </p>
-                              </div>
-                            )}
-                          </div>
-                        </div>
+                    {/* Action buttons */}
+                    {!isCurrent && !isFree && isPending && (
+                      <button
+                        onClick={handleCancelPendingChange}
+                        disabled={changingPlan}
+                        className="mt-3 flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-blue-500/30 py-2 text-xs font-medium text-blue-400 transition-colors hover:bg-blue-500/10 disabled:opacity-50"
+                      >
+                        <X className="h-3 w-3" /> Cancel Downgrade
+                      </button>
+                    )}
+                    {!isCurrent && !isFree && !isPending && (
+                      <button
+                        onClick={() => {
+                          if (isAnnual) return; // Annual not available yet
+                          handleChangePlan(plan.id as "starter" | "pro" | "team");
+                        }}
+                        disabled={changingPlan || !!subscription?.pendingPlan || subscribingPlan === plan.id || isAnnual}
+                        className={`mt-3 flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-medium transition-colors disabled:opacity-50 ${
+                          isUpgrade
+                            ? "bg-foreground text-background hover:opacity-90"
+                            : "border border-border hover:bg-muted"
+                        } ${isAnnual ? "cursor-not-allowed" : ""}`}
+                        title={isAnnual ? "Annual billing coming soon" : undefined}
+                      >
+                        {subscribingPlan === plan.id ? (
+                          <span className="flex items-center gap-2">
+                            <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                            Loading...
+                          </span>
+                        ) : isAnnual ? (
+                          "Coming soon"
+                        ) : !subscription?.active ? (
+                          "Subscribe"
+                        ) : isUpgrade ? (
+                          <>
+                            <ArrowUp className="h-3 w-3" /> Upgrade
+                          </>
+                        ) : isDowngrade ? (
+                          <>
+                            <ArrowDown className="h-3 w-3" /> Downgrade
+                          </>
+                        ) : (
+                          "Subscribe"
+                        )}
+                      </button>
+                    )}
+                    {isCurrent && !isFree && (
+                      <div className="mt-3 flex w-full items-center justify-center rounded-lg border border-border py-2 text-xs font-medium text-muted-foreground">
+                        Current Plan
                       </div>
                     )}
                   </div>
                 );
               })}
             </div>
-          </>
-        )}
+
+            {/* Footer */}
+            <p className="mt-4 flex items-center gap-1.5 text-xs text-muted-foreground">
+              <AlertCircle className="h-3 w-3" />
+              Upgrades are immediate with prorated billing. Downgrades take effect at cycle end. All prices in USD.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Tab Bar */}
+      <div className="mb-6 flex gap-1 border-b border-border">
+        <button
+          onClick={() => setActiveTab("billing")}
+          className={`cursor-pointer px-4 py-2.5 text-sm font-medium transition-colors ${
+            activeTab === "billing"
+              ? "border-b-2 border-foreground text-foreground"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Billing
+        </button>
+        <button
+          onClick={() => setActiveTab("invoices")}
+          className={`cursor-pointer px-4 py-2.5 text-sm font-medium transition-colors ${
+            activeTab === "invoices"
+              ? "border-b-2 border-foreground text-foreground"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Invoices
+        </button>
       </div>
 
-      {/* Test Reset */}
+      {/* ═══ BILLING TAB ═══ */}
+      {activeTab === "billing" && (
+        <div className="space-y-6">
+          {/* Plan Status Card */}
+          <div className="rounded-xl border border-border bg-card p-6">
+            <div className="flex items-start justify-between">
+              <div>
+                <h2 className="text-sm font-medium text-muted-foreground">Your plan</h2>
+                <div className="mt-1 flex items-center gap-2.5">
+                  <span className="text-xl font-bold capitalize">
+                    {subscription?.active
+                      ? subscription.planName ?? subscription.plan
+                      : quota?.plan?.name ?? "Free"}
+                  </span>
+                  {subscription?.active && subscription.price ? (
+                    <span className="text-sm text-muted-foreground">
+                      ${subscription.price}/month
+                    </span>
+                  ) : (
+                    <span className="text-sm text-muted-foreground">Free tier</span>
+                  )}
+                </div>
+              </div>
+              <button
+                onClick={() => setShowPlanModal(true)}
+                className="cursor-pointer rounded-lg border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted"
+              >
+                Adjust plan
+              </button>
+            </div>
+
+            {/* Usage + Credits Row */}
+            <div className="mt-5 grid gap-5 sm:grid-cols-2">
+              {/* Usage */}
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <Zap className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">Monthly Usage</span>
+                </div>
+                {quota?.monthly.max !== null && quota?.monthly.max !== undefined ? (
+                  <>
+                    <div className="mt-2 flex items-baseline gap-1.5">
+                      <span className="text-lg font-semibold">
+                        {formatCurrency(quota!.monthly.current)}
+                      </span>
+                      <span className="text-sm text-muted-foreground">
+                        / {formatCurrency(quota!.monthly.max)}
+                      </span>
+                      {quota?.overageActive && (
+                        <span className="ml-1 text-xs text-orange-500">(overage)</span>
+                      )}
+                    </div>
+                    <div className="mt-1.5 h-1.5 w-full rounded-full bg-muted">
+                      <div
+                        className={`h-1.5 rounded-full transition-all ${
+                          quota?.overageActive
+                            ? "bg-orange-500"
+                            : (monthlyPct ?? 0) >= 90
+                              ? "bg-red-500"
+                              : (monthlyPct ?? 0) >= 70
+                                ? "bg-amber-500"
+                                : "bg-green-500"
+                        }`}
+                        style={{ width: `${Math.min(monthlyPct ?? 0, 100)}%` }}
+                      />
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Resets {quota!.monthly.resetsAt ? formatDate(quota!.monthly.resetsAt) : "next month"}
+                    </p>
+                  </>
+                ) : (
+                  <p className="mt-2 text-lg font-semibold">
+                    {quota ? formatCurrency(quota.monthly.current) : "—"}
+                    <span className="ml-1.5 text-sm font-normal text-muted-foreground">No limit</span>
+                  </p>
+                )}
+              </div>
+
+              {/* Credit Balance */}
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <CreditCard className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">Credit Balance</span>
+                </div>
+                <p className="mt-2 text-lg font-semibold">
+                  {quota ? formatCurrency(quota.balance) : "—"}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Used for overage beyond plan allowance
+                </p>
+              </div>
+            </div>
+
+            {/* Renewal / Grace / Pending info */}
+            <div className="mt-5 border-t border-border pt-4">
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+                {subscription?.active && subscription.renewsAt && !subscription.graceUntil && (
+                  <span className="text-muted-foreground">
+                    Next renewal: <span className="text-foreground">{formatDate(subscription.renewsAt)}</span>
+                  </span>
+                )}
+                {subscription?.graceUntil && (
+                  <span className="text-amber-500">
+                    Cancels on {formatDate(subscription.graceUntil)}
+                  </span>
+                )}
+                {subscription?.pendingPlan && subscription.pendingPlanEffectiveAt && (
+                  <span className="text-blue-400">
+                    Downgrades to {subscription.pendingPlan.charAt(0).toUpperCase() + subscription.pendingPlan.slice(1)} on {formatDate(subscription.pendingPlanEffectiveAt)}
+                  </span>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="mt-3 flex items-center gap-4">
+                {subscription?.active && subscription.graceUntil && (
+                  <button
+                    onClick={handleResumeSubscription}
+                    disabled={changingPlan}
+                    className="cursor-pointer text-sm font-medium text-foreground hover:underline disabled:opacity-50"
+                  >
+                    Resume subscription
+                  </button>
+                )}
+                {subscription?.active && !subscription.graceUntil && (
+                  <button
+                    onClick={() => setConfirmAction({ type: "cancel" })}
+                    className="cursor-pointer text-sm text-red-500/70 hover:text-red-500"
+                  >
+                    Cancel subscription
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Payment Method Card */}
+          <div className="rounded-xl border border-border bg-card p-5">
+            <h3 className="text-sm font-medium text-muted-foreground">Payment method</h3>
+            {subscription?.active && subscription.cardBrand ? (
+              <div className="mt-3 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <CreditCard className="h-5 w-5 text-muted-foreground" />
+                  <span className="text-sm">
+                    {subscription.cardBrand} ending in {subscription.cardLastFour}
+                  </span>
+                </div>
+                {subscription.updatePaymentUrl && (
+                  <a
+                    href={subscription.updatePaymentUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex cursor-pointer items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    Manage <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                )}
+              </div>
+            ) : (
+              <p className="mt-3 text-sm text-muted-foreground">
+                No payment method on file. Subscribe to a plan to add one.
+              </p>
+            )}
+          </div>
+
+          {/* Add Credits */}
+          <div className="rounded-xl border border-border bg-card p-5">
+            <h2 className="font-semibold">Add Credits</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Top up credits for overage beyond your plan allowance
+            </p>
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-1 rounded-lg border border-border px-3 py-2">
+                <span className="text-sm text-muted-foreground">$</span>
+                <input
+                  type="number"
+                  value={creditAmount}
+                  onChange={(e) => setCreditAmount(Number(e.target.value))}
+                  min={MIN_CREDIT}
+                  step={1}
+                  className="w-24 bg-transparent text-sm outline-none"
+                />
+              </div>
+              <div className="flex gap-2">
+                {CREDIT_PRESETS.map((amount) => (
+                  <button
+                    key={amount}
+                    onClick={() => setCreditAmount(amount)}
+                    className={`cursor-pointer rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${
+                      creditAmount === amount
+                        ? "border-foreground bg-foreground text-background"
+                        : "border-border hover:bg-muted"
+                    }`}
+                  >
+                    ${amount}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={handleAddCredits}
+                disabled={addingCredits || creditAmount < MIN_CREDIT}
+                className="flex cursor-pointer items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                {addingCredits ? "Processing..." : "Add Credits"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ INVOICES TAB ═══ */}
+      {activeTab === "invoices" && (
+        <div className="space-y-6">
+          {/* Payment History */}
+          <div className="rounded-xl border border-border bg-card">
+            <div className="flex items-center justify-between border-b border-border px-5 py-4">
+              <h2 className="font-semibold">Payment History</h2>
+            </div>
+            {payments.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
+                <Clock className="mb-2 h-6 w-6" />
+                <p className="text-sm">No payments yet</p>
+              </div>
+            ) : (
+              <>
+                {/* Table header */}
+                <div className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-4 border-b border-border px-5 py-2.5 text-xs font-medium text-muted-foreground sm:grid-cols-[1fr_100px_100px_100px_100px]">
+                  <span>Date</span>
+                  <span className="hidden sm:block">Type</span>
+                  <span>Status</span>
+                  <span className="text-right">Amount</span>
+                  <span className="w-6" />
+                </div>
+
+                {/* Table rows */}
+                <div className="divide-y divide-border">
+                  {payments.map((p) => {
+                    const isExpanded = expandedPayment === p.id;
+                    const statusColor =
+                      p.status === "captured"
+                        ? "bg-green-500/10 text-green-500"
+                        : p.status === "failed"
+                          ? "bg-red-500/10 text-red-500"
+                          : p.status === "refunded"
+                            ? "bg-amber-500/10 text-amber-500"
+                            : "bg-muted text-muted-foreground";
+
+                    const productLabel = p.upgrade
+                      ? `Upgrade · ${p.upgrade.from} → ${p.upgrade.to}`
+                      : p.type === "onboarding"
+                        ? "Onboarding Credits"
+                        : p.type === "credits"
+                          ? "Credits Top-Up"
+                          : p.type === "subscription"
+                            ? "Monthly Subscription"
+                            : p.type === "refund"
+                              ? "Refund"
+                              : p.type;
+
+                    return (
+                      <div key={p.id}>
+                        <button
+                          onClick={() => setExpandedPayment(isExpanded ? null : p.id)}
+                          className="grid w-full grid-cols-[1fr_auto_auto_auto] items-center gap-4 px-5 py-3.5 text-left transition-colors hover:bg-muted/50 sm:grid-cols-[1fr_100px_100px_100px_100px]"
+                        >
+                          <span className="text-sm">{formatDate(p.timeCreated)}</span>
+                          <span className="hidden text-sm capitalize text-muted-foreground sm:block">
+                            {p.type}
+                          </span>
+                          <span>
+                            <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${statusColor}`}>
+                              {p.status === "captured" && <CheckCircle2 className="h-3 w-3" />}
+                              {p.status === "captured" ? "Paid" : p.status.charAt(0).toUpperCase() + p.status.slice(1)}
+                            </span>
+                          </span>
+                          <span className="text-right text-sm font-medium">
+                            ${p.amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                          <span className="flex justify-end">
+                            <ChevronDown
+                              className={`h-4 w-4 text-muted-foreground transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                            />
+                          </span>
+                        </button>
+
+                        {isExpanded && (
+                          <div className="border-t border-border bg-muted/30 px-5 py-4">
+                            <div className="grid gap-3 sm:grid-cols-2">
+                              <div className="space-y-2.5">
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Product</p>
+                                  <p className="text-sm font-medium capitalize">{productLabel}</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Date</p>
+                                  <p className="text-sm">{new Date(p.timeCreated).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Transaction ID</p>
+                                  <p className="font-mono text-xs text-muted-foreground">{p.id}</p>
+                                </div>
+                              </div>
+                              <div className="space-y-2.5">
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Amount</p>
+                                  <p className="text-sm font-medium">
+                                    ${p.amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {p.currency}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Status</p>
+                                  <p className={`text-sm capitalize ${p.status === "captured" ? "text-green-500" : p.status === "failed" ? "text-red-500" : "text-muted-foreground"}`}>
+                                    {p.status === "captured" ? "Paid" : p.status}
+                                  </p>
+                                </div>
+                                {p.upgrade && (
+                                  <div>
+                                    <p className="text-xs text-muted-foreground">Plan Change</p>
+                                    <p className="text-sm">
+                                      <span className="capitalize">{p.upgrade.from}</span>
+                                      {" → "}
+                                      <span className="font-medium capitalize">{p.upgrade.to}</span>
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Test Reset — visible on both tabs */}
       <div className="mt-8 rounded-xl border border-red-500/20 bg-card p-5">
         <div className="flex items-center justify-between">
           <div>
