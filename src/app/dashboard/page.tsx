@@ -139,7 +139,7 @@ export default function DashboardOverview() {
           {[
             {
               label: "Add Credits",
-              desc: "Top up your balance with Razorpay",
+              desc: "Top up your balance",
               href: "/dashboard/billing",
             },
             {

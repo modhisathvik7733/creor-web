@@ -161,7 +161,7 @@ export default function PricingPage() {
 
       {/* Footer */}
       <footer className="border-t border-border py-8 text-center text-xs text-foreground-secondary">
-        All prices in INR. Billed monthly via Razorpay. Cancel anytime.
+        All prices in INR. Billed monthly via Cashfree. Cancel anytime.
       </footer>
     </div>
   );

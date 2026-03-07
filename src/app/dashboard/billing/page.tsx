@@ -149,11 +149,11 @@ export default function BillingPage() {
   const symbol = quota?.symbol ?? "₹";
   const currentPlanId = subscription?.active ? subscription.plan : "free";
 
-  // Load Razorpay checkout script
+  // Load Cashfree checkout SDK
   useEffect(() => {
-    if (document.querySelector('script[src*="razorpay"]')) return;
+    if (document.querySelector('script[src*="cashfree"]')) return;
     const script = document.createElement("script");
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.src = "https://sdk.cashfree.com/js/v3/cashfree.js";
     script.async = true;
     document.body.appendChild(script);
   }, []);
@@ -254,36 +254,27 @@ export default function BillingPage() {
     setError(null);
     try {
       const order = await api.addCredits(creditAmount);
-      const options = {
-        key: order.keyId,
-        amount: order.amountSmallest,
-        currency: order.currency,
-        name: "Creor",
-        description: `Add ${order.symbol ?? symbol}${creditAmount} credits`,
-        order_id: order.orderId,
-        handler: async (response: {
-          razorpay_order_id: string;
-          razorpay_payment_id: string;
-          razorpay_signature: string;
-        }) => {
-          try {
-            await api.verifyPayment(response);
-            setPaymentSuccess(true);
-            await fetchData();
-          } catch {
-            setError("Payment verification failed. Contact support if charged.");
-          }
-        },
-        modal: { ondismiss: () => setAddingCredits(false) },
-        theme: { color: "#171717" },
-      };
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const rzp = new (window as unknown as Record<string, any>).Razorpay(options);
-      rzp.on("payment.failed", () => {
+      const cashfree = new (window as any).Cashfree({
+        mode: process.env.NEXT_PUBLIC_CASHFREE_ENV === "sandbox" ? "sandbox" : "production",
+      });
+      const result = await cashfree.checkout({
+        paymentSessionId: order.paymentSessionId,
+        redirectTarget: "_modal",
+      });
+      if (result.error) {
         setError("Payment failed. Please try again.");
         setAddingCredits(false);
-      });
-      rzp.open();
+        return;
+      }
+      try {
+        await api.verifyPayment({ orderId: order.orderId });
+        setPaymentSuccess(true);
+        await fetchData();
+      } catch {
+        setError("Payment verification failed. Contact support if charged.");
+      }
+      setAddingCredits(false);
     } catch {
       setError("Failed to create order");
       setAddingCredits(false);
@@ -295,47 +286,40 @@ export default function BillingPage() {
     setError(null);
     try {
       const result = await api.subscribe(planId);
-      const options = {
-        key: result.keyId,
-        subscription_id: result.subscriptionId,
-        name: "Creor",
-        description: `${result.plan.charAt(0).toUpperCase() + result.plan.slice(1)} Plan — ${result.currency} ${result.price}/mo`,
-        handler: async () => {
-          try {
-            await api.activateSubscription(result.subscriptionId);
-          } catch {}
-          setPaymentSuccess(true);
-          for (let i = 0; i < 6; i++) {
-            await new Promise((r) => setTimeout(r, 1000));
-            try {
-              const [q, s, p] = await Promise.all([
-                api.getQuota(),
-                api.getSubscription(),
-                api.getPayments(),
-              ]);
-              setQuota(q);
-              setSubscription(s);
-              setPayments(p.payments);
-              if (s.active) break;
-              await api.activateSubscription(result.subscriptionId).catch(() => {});
-            } catch {
-              break;
-            }
-          }
-        },
-        modal: {
-          ondismiss: () => {
-            localStorage.setItem("creor_pending_subscription", result.subscriptionId);
-          },
-        },
-        theme: { color: "#171717" },
-      };
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const rzp = new (window as unknown as Record<string, any>).Razorpay(options);
-      rzp.on("payment.failed", () => {
-        setError("Subscription payment failed. Please try again.");
+      const cashfree = new (window as any).Cashfree({
+        mode: process.env.NEXT_PUBLIC_CASHFREE_ENV === "sandbox" ? "sandbox" : "production",
       });
-      rzp.open();
+      const checkoutResult = await cashfree.checkout({
+        paymentSessionId: result.paymentSessionId,
+        redirectTarget: "_modal",
+      });
+      if (checkoutResult.error) {
+        localStorage.setItem("creor_pending_subscription", result.subscriptionId);
+        setError("Subscription payment failed. Please try again.");
+        return;
+      }
+      try {
+        await api.activateSubscription(result.subscriptionId);
+      } catch {}
+      setPaymentSuccess(true);
+      for (let i = 0; i < 6; i++) {
+        await new Promise((r) => setTimeout(r, 1000));
+        try {
+          const [q, s, p] = await Promise.all([
+            api.getQuota(),
+            api.getSubscription(),
+            api.getPayments(),
+          ]);
+          setQuota(q);
+          setSubscription(s);
+          setPayments(p.payments);
+          if (s.active) break;
+          await api.activateSubscription(result.subscriptionId).catch(() => {});
+        } catch {
+          break;
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create subscription.");
     }
