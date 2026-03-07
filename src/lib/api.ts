@@ -218,6 +218,10 @@ class ApiClient {
     return this.post<{ success: boolean }>("/api/billing/resume-subscription", {});
   }
 
+  async resetBillingTest() {
+    return this.post<{ success: boolean; message: string }>("/api/billing/reset-test", {});
+  }
+
   async getPayments(page = 1, limit = 20) {
     return this.get<{
       payments: Array<{

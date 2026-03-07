@@ -229,10 +229,11 @@ export default function BillingPage() {
   const [addingCredits, setAddingCredits] = useState(false);
   const [creditAmount, setCreditAmount] = useState(5);
   const [confirmAction, setConfirmAction] = useState<{
-    type: "downgrade" | "cancel";
+    type: "downgrade" | "cancel" | "reset";
     plan?: string;
   } | null>(null);
   const [changingPlan, setChangingPlan] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   const { toasts, push: pushToast, dismiss: dismissToast } = useToasts();
 
@@ -515,6 +516,30 @@ export default function BillingPage() {
     }
   };
 
+  // ── Reset Billing (Test Only) ──
+  const handleResetBilling = async () => {
+    setResetting(true);
+    setConfirmAction(null);
+    try {
+      await api.resetBillingTest();
+      pushToast({
+        variant: "success",
+        title: "Billing reset",
+        description: "All billing data cleared. You are on the Free plan.",
+      });
+      shownWarningsRef.current.clear();
+      await fetchData();
+    } catch (err) {
+      pushToast({
+        variant: "error",
+        title: "Reset failed",
+        description: err instanceof Error ? err.message : "Failed to reset.",
+      });
+    } finally {
+      setResetting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -543,26 +568,32 @@ export default function BillingPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="w-full max-w-sm rounded-xl border border-border bg-card p-6 shadow-xl">
             <h3 className="font-semibold">
-              {confirmAction.type === "cancel" ? "Cancel Subscription?" : `Downgrade to ${confirmAction.plan?.charAt(0).toUpperCase()}${confirmAction.plan?.slice(1)}?`}
+              {confirmAction.type === "reset"
+                ? "Reset All Billing Data?"
+                : confirmAction.type === "cancel"
+                  ? "Cancel Subscription?"
+                  : `Downgrade to ${confirmAction.plan?.charAt(0).toUpperCase()}${confirmAction.plan?.slice(1)}?`}
             </h3>
             <p className="mt-2 text-sm text-muted-foreground">
-              {confirmAction.type === "cancel"
-                ? "Your subscription will remain active until the end of your current billing cycle, then revert to the Free plan. Your credits will be preserved."
-                : "Your plan will change at the end of your current billing cycle. You'll keep your current plan limits until then. Credits are preserved."}
+              {confirmAction.type === "reset"
+                ? "This will cancel your subscription, delete all payment history, and reset credits to $0. You'll be on the Free plan. This cannot be undone."
+                : confirmAction.type === "cancel"
+                  ? "Your subscription will remain active until the end of your current billing cycle, then revert to the Free plan. Your credits will be preserved."
+                  : "Your plan will change at the end of your current billing cycle. You'll keep your current plan limits until then. Credits are preserved."}
             </p>
             <div className="mt-4 flex gap-3">
               <button
                 onClick={() => setConfirmAction(null)}
                 className="flex-1 rounded-lg border border-border py-2 text-sm font-medium transition-colors hover:bg-muted"
               >
-                Keep Current
+                {confirmAction.type === "reset" ? "Cancel" : "Keep Current"}
               </button>
               <button
-                onClick={confirmAction.type === "cancel" ? handleCancelSubscription : confirmDowngrade}
-                disabled={changingPlan}
+                onClick={confirmAction.type === "reset" ? handleResetBilling : confirmAction.type === "cancel" ? handleCancelSubscription : confirmDowngrade}
+                disabled={changingPlan || resetting}
                 className="flex-1 rounded-lg bg-red-500 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
               >
-                {changingPlan ? "Processing..." : confirmAction.type === "cancel" ? "Cancel" : "Downgrade"}
+                {changingPlan || resetting ? "Processing..." : confirmAction.type === "reset" ? "Reset Everything" : confirmAction.type === "cancel" ? "Cancel" : "Downgrade"}
               </button>
             </div>
           </div>
@@ -860,6 +891,26 @@ export default function BillingPage() {
             ))}
           </div>
         )}
+      </div>
+
+      {/* Test Reset */}
+      <div className="mt-8 rounded-xl border border-red-500/20 bg-card p-5">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-semibold text-red-400">Test Reset</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Wipe all billing data (subscription, payments, credits) and start fresh.
+            </p>
+          </div>
+          <button
+            onClick={() => setConfirmAction({ type: "reset" })}
+            disabled={resetting}
+            className="flex items-center gap-1.5 rounded-lg border border-red-500/30 px-4 py-2 text-sm font-medium text-red-400 transition-colors hover:bg-red-500/10 disabled:opacity-50"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            {resetting ? "Resetting..." : "Reset"}
+          </button>
+        </div>
       </div>
     </div>
   );
