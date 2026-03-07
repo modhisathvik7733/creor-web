@@ -174,26 +174,22 @@ export default function BillingPage() {
     }
   }, []);
 
-  // Activate pending subscription — runs on every page load AND on redirect
+  // Activate pending subscription — runs when returning from Cashfree checkout
   useEffect(() => {
-    const isPaymentReturn = searchParams.get("payment") === "success";
-    if (isPaymentReturn) {
-      router.replace("/dashboard/billing", { scroll: false });
-    }
-
     const pendingSubId = localStorage.getItem("creor_pending_subscription");
-    if (!pendingSubId && !isPaymentReturn) return;
+    if (!pendingSubId) return;
+
+    localStorage.removeItem("creor_pending_subscription");
 
     const activate = async () => {
-      if (pendingSubId) {
-        localStorage.removeItem("creor_pending_subscription");
-        try {
-          await api.activateSubscription(pendingSubId);
-        } catch {
-          // Webhook may handle it
-        }
+      // Try activating — will only succeed if Cashfree status is ACTIVE (payment completed)
+      try {
+        await api.activateSubscription(pendingSubId);
+      } catch {
+        // Payment not completed or webhook will handle it
       }
 
+      // Refresh data and check actual status
       try {
         const [q, s, p] = await Promise.all([
           api.getQuota(),
@@ -203,9 +199,12 @@ export default function BillingPage() {
         setQuota(q);
         setSubscription(s);
         setPayments(p.payments);
-        if (isPaymentReturn || s.active) setPaymentSuccess(true);
 
-        if (pendingSubId && !s.active) {
+        // Only show success if subscription is actually active
+        if (s.active) {
+          setPaymentSuccess(true);
+        } else {
+          // Poll a few times — Cashfree webhook may activate it shortly
           let attempts = 0;
           const poll = setInterval(async () => {
             attempts++;
@@ -214,7 +213,11 @@ export default function BillingPage() {
               const [q2, s2] = await Promise.all([api.getQuota(), api.getSubscription()]);
               setQuota(q2);
               setSubscription(s2);
-              if (s2.active || attempts >= 8) clearInterval(poll);
+              if (s2.active) {
+                setPaymentSuccess(true);
+                clearInterval(poll);
+              }
+              if (attempts >= 8) clearInterval(poll);
             } catch {
               clearInterval(poll);
             }
@@ -227,7 +230,7 @@ export default function BillingPage() {
     };
 
     activate();
-  }, [searchParams, router]);
+  }, []);
 
   useEffect(() => {
     fetchData();
