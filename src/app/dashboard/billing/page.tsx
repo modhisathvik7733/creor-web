@@ -773,7 +773,9 @@ export default function BillingPage() {
                         : "border border-border hover:bg-muted"
                     }`}
                   >
-                    {isUpgrade ? (
+                    {!subscription?.active ? (
+                      "Subscribe"
+                    ) : isUpgrade ? (
                       <>
                         <ArrowUp className="h-3.5 w-3.5" /> Upgrade
                       </>
