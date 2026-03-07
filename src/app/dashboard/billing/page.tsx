@@ -440,13 +440,39 @@ export default function BillingPage() {
     setChangingPlan(true);
     setConfirmAction(null);
     try {
-      await api.changePlan(confirmAction.plan as "starter" | "pro" | "team");
+      const result = await api.changePlan(confirmAction.plan as "starter" | "pro" | "team");
+      const planLabel = confirmAction.plan.charAt(0).toUpperCase() + confirmAction.plan.slice(1);
+      pushToast({
+        variant: "info",
+        title: `Downgrade to ${planLabel} scheduled`,
+        description: result.effectiveAt
+          ? `Takes effect on ${formatDate(result.effectiveAt)}.`
+          : "Takes effect at end of billing cycle.",
+      });
       await fetchData();
     } catch (err) {
       pushToast({
         variant: "error",
         title: "Downgrade failed",
         description: err instanceof Error ? err.message : "Failed to downgrade.",
+      });
+    } finally {
+      setChangingPlan(false);
+    }
+  };
+
+  // ── Cancel Pending Plan Change ──
+  const handleCancelPendingChange = async () => {
+    setChangingPlan(true);
+    try {
+      await api.cancelPendingChange();
+      pushToast({ variant: "success", title: "Pending downgrade cancelled" });
+      await fetchData();
+    } catch (err) {
+      pushToast({
+        variant: "error",
+        title: "Failed to cancel",
+        description: err instanceof Error ? err.message : "Please try again.",
       });
     } finally {
       setChangingPlan(false);
@@ -695,8 +721,10 @@ export default function BillingPage() {
                     </span>
                   )}
                   {isPending && (
-                    <span className="rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-blue-500">
-                      Pending
+                    <span className="rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-medium tracking-wide text-blue-500">
+                      {subscription?.pendingPlanEffectiveAt
+                        ? `From ${formatDate(subscription.pendingPlanEffectiveAt)}`
+                        : "Pending"}
                     </span>
                   )}
                 </div>
@@ -720,10 +748,19 @@ export default function BillingPage() {
                     </li>
                   ))}
                 </ul>
-                {!isCurrent && !isFree && (
+                {!isCurrent && !isFree && isPending && (
+                  <button
+                    onClick={handleCancelPendingChange}
+                    disabled={changingPlan}
+                    className="mt-5 flex w-full items-center justify-center gap-1.5 rounded-lg border border-blue-500/30 py-2.5 text-sm font-medium text-blue-400 transition-colors hover:bg-blue-500/10 disabled:opacity-50"
+                  >
+                    <X className="h-3.5 w-3.5" /> Cancel Downgrade
+                  </button>
+                )}
+                {!isCurrent && !isFree && !isPending && (
                   <button
                     onClick={() => handleChangePlan(plan.id as "starter" | "pro" | "team")}
-                    disabled={changingPlan || isPending}
+                    disabled={changingPlan || !!subscription?.pendingPlan}
                     className={`mt-5 flex w-full items-center justify-center gap-1.5 rounded-lg py-2.5 text-sm font-medium transition-colors disabled:opacity-50 ${
                       isUpgrade
                         ? "bg-foreground text-background hover:opacity-90"

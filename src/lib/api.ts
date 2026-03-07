@@ -198,7 +198,12 @@ class ApiClient {
       success: boolean;
       direction: "upgrade" | "downgrade";
       newPlan: string;
+      effectiveAt?: string | null;
     }>("/api/billing/change-plan", { plan });
+  }
+
+  async cancelPendingChange() {
+    return this.post<{ success: boolean }>("/api/billing/cancel-pending-change", {});
   }
 
   async cancelSubscription() {
