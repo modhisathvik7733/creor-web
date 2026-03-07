@@ -288,11 +288,16 @@ export default function BillingPage() {
       const result = await api.subscribe(planId);
       // Store pending subscription before redirect
       localStorage.setItem("creor_pending_subscription", result.subscriptionId);
-      // Redirect to Cashfree hosted checkout for subscriptions
-      const cfBase = process.env.NEXT_PUBLIC_CASHFREE_ENV === "sandbox"
-        ? "https://sandbox.cashfree.com/pg"
-        : "https://api.cashfree.com/pg";
-      window.location.href = `${cfBase}/subscriptions/pay/${result.paymentSessionId}`;
+      // Use Cashfree SDK with full-page redirect for subscriptions
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const cashfree = new (window as any).Cashfree({
+        mode: process.env.NEXT_PUBLIC_CASHFREE_ENV === "sandbox" ? "sandbox" : "production",
+      });
+      cashfree.checkout({
+        paymentSessionId: result.paymentSessionId,
+        redirectTarget: "_self",
+        returnUrl: "https://creor.ai/dashboard/billing?payment=success",
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create subscription.");
     }
