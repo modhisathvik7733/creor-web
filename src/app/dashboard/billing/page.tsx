@@ -382,15 +382,6 @@ export default function BillingPage() {
           </p>
         </div>
       )}
-      {quota?.warnings.includes("low_credits") && (
-        <div className="mb-6 flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
-          <AlertCircle className="h-5 w-5 shrink-0 text-amber-500" />
-          <p className="text-sm font-medium text-amber-500">
-            Low credits — top up to avoid interruptions after plan allowance is used.
-          </p>
-        </div>
-      )}
-
       {/* Blocked Banner */}
       {quota && !quota.canSend && (
         <div className="mb-6 flex items-center gap-3 rounded-xl border border-red-500/30 bg-red-500/10 p-4">
