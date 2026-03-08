@@ -72,6 +72,13 @@ class ApiClient {
     });
   }
 
+  put<T>(path: string, body?: unknown) {
+    return this.request<T>(path, {
+      method: "PUT",
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  }
+
   delete<T>(path: string) {
     return this.request<T>(path, { method: "DELETE" });
   }
@@ -304,12 +311,232 @@ class ApiClient {
     }>("/api/models");
   }
 
+  // ── Sessions ──
+
+  async logout() {
+    return this.post<{ success: boolean }>("/api/auth/logout");
+  }
+
+  async getSessions() {
+    return this.get<
+      Array<{
+        id: string;
+        device: string | null;
+        ipAddress: string | null;
+        userAgent: string | null;
+        timeCreated: string;
+        timeExpires: string;
+      }>
+    >("/api/auth/sessions");
+  }
+
+  async revokeSession(id: string) {
+    return this.delete<{ success: boolean }>(`/api/auth/sessions/${id}`);
+  }
+
   // ── Device Auth ──
 
   async approveDevice(userCode: string) {
     return this.post<{ success: boolean }>("/api/auth/device/approve", {
       userCode,
     });
+  }
+
+  // ── Invites ──
+
+  async getInvites() {
+    return this.get<
+      Array<{
+        id: string;
+        email: string;
+        role: string;
+        invitedBy: string;
+        timeCreated: string;
+      }>
+    >("/api/invites");
+  }
+
+  async createInvite(email: string, role: "admin" | "member") {
+    return this.post<{
+      id: string;
+      email: string;
+      role: string;
+      timeCreated: string;
+    }>("/api/invites", { email, role });
+  }
+
+  async deleteInvite(id: string) {
+    return this.delete<{ success: boolean }>(`/api/invites/${id}`);
+  }
+
+  // ── Projects ──
+
+  async getProjects() {
+    return this.get<
+      Array<{
+        id: string;
+        name: string;
+        path: string | null;
+        repoUrl: string | null;
+        description: string | null;
+        language: string | null;
+        branch: string | null;
+        status: string | null;
+        sessionCount: number | null;
+        timeLastActive: string | null;
+        timeCreated: string;
+        timeUpdated: string;
+      }>
+    >("/api/projects");
+  }
+
+  async createProject(data: { name: string; description?: string; language?: string }) {
+    return this.post<{
+      id: string;
+      name: string;
+      description: string | null;
+      language: string | null;
+      branch: string | null;
+      status: string | null;
+      timeCreated: string;
+    }>("/api/projects", data);
+  }
+
+  async deleteProject(id: string) {
+    return this.delete<{ success: boolean }>(`/api/projects/${id}`);
+  }
+
+  // ── Activity ──
+
+  async getActivity(page = 1, limit = 50) {
+    return this.get<{
+      activities: Array<{
+        id: string;
+        action: string;
+        resourceType: string | null;
+        resourceId: string | null;
+        metadata: Record<string, unknown> | null;
+        ipAddress: string | null;
+        timeCreated: string;
+        actor: {
+          name: string | null;
+          email: string | null;
+          avatarUrl: string | null;
+        };
+      }>;
+      page: number;
+      limit: number;
+    }>(`/api/activity?page=${page}&limit=${limit}`);
+  }
+
+  // ── Provider Credentials (BYOK) ──
+
+  async getProviderCredentials() {
+    return this.get<
+      Array<{
+        id: string;
+        provider: string;
+        hasCredential: boolean;
+        timeCreated: string;
+      }>
+    >("/api/providers/credentials");
+  }
+
+  async setProviderCredential(provider: string, apiKey: string) {
+    return this.put<{ success: boolean; provider: string }>(
+      `/api/providers/credentials/${provider}`,
+      { apiKey }
+    );
+  }
+
+  async deleteProviderCredential(provider: string) {
+    return this.delete<{ success: boolean }>(
+      `/api/providers/credentials/${provider}`
+    );
+  }
+
+  async testProviderCredential(provider: string) {
+    return this.post<{ valid: boolean; error?: string }>(
+      `/api/providers/credentials/${provider}/test`
+    );
+  }
+
+  // ── Marketplace ──
+
+  async getMarketplaceCatalog(params?: { category?: string; search?: string; featured?: boolean }) {
+    const qs = new URLSearchParams();
+    if (params?.category) qs.set("category", params.category);
+    if (params?.search) qs.set("search", params.search);
+    if (params?.featured) qs.set("featured", "true");
+    const query = qs.toString();
+    return this.get<
+      Array<{
+        id: string;
+        slug: string;
+        name: string;
+        description: string;
+        category: string;
+        icon: string | null;
+        author: string | null;
+        serverType: string;
+        tags: string[];
+        featured: boolean;
+        verified: boolean;
+        installCount: number;
+        configParams: Array<{
+          key: string;
+          label: string;
+          placeholder: string;
+          required: boolean;
+          secret: boolean;
+        }>;
+      }>
+    >(`/api/marketplace/catalog${query ? `?${query}` : ""}`);
+  }
+
+  async getMarketplaceInstallations() {
+    return this.get<
+      Array<{
+        id: string;
+        mcpName: string;
+        enabled: boolean;
+        timeCreated: string;
+        catalog: {
+          name: string;
+          slug: string;
+          icon: string | null;
+          category: string;
+          author: string | null;
+        };
+      }>
+    >("/api/marketplace/installations");
+  }
+
+  async installMarketplaceItem(
+    catalogSlug: string,
+    configValues?: Record<string, string>,
+    mcpName?: string
+  ) {
+    return this.post<{ id: string; mcpName: string }>(
+      "/api/marketplace/installations",
+      { catalogSlug, configValues, mcpName }
+    );
+  }
+
+  async updateMarketplaceInstallation(
+    id: string,
+    data: { enabled?: boolean; configValues?: Record<string, string> }
+  ) {
+    return this.patch<{ success: boolean }>(
+      `/api/marketplace/installations/${id}`,
+      data
+    );
+  }
+
+  async uninstallMarketplaceItem(id: string) {
+    return this.delete<{ success: boolean }>(
+      `/api/marketplace/installations/${id}`
+    );
   }
 
   // ── Share ──

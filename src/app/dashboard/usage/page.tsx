@@ -24,8 +24,8 @@ interface DailyUsage {
   requests: number;
 }
 
-function formatUSD(cents: number): string {
-  return `$${(cents / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+function formatUSD(amount: number): string {
+  return `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function formatTokens(n: number): string {

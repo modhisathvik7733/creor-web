@@ -211,7 +211,7 @@ const PLAN_DEFS = [
   },
 ];
 
-const ANNUAL_DISCOUNT = 0.20;
+// Annual billing toggle removed — add back after setting up annual LS variants
 
 function formatCurrency(amount: number): string {
   return `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -244,7 +244,7 @@ export default function BillingPage() {
   const [expandedPayment, setExpandedPayment] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"billing" | "invoices">("billing");
   const [showPlanModal, setShowPlanModal] = useState(false);
-  const [billingPeriod, setBillingPeriod] = useState<"monthly" | "annual">("monthly");
+  // billingPeriod removed — annual billing not yet wired to API
 
   const { toasts, push: pushToast, dismiss: dismissToast } = useToasts();
   const shownWarningsRef = useRef<Set<string>>(new Set());
@@ -637,35 +637,6 @@ export default function BillingPage() {
             </div>
 
             <div className="px-8 py-6">
-              {/* Billing Period Toggle */}
-              <div className="flex justify-center">
-                <div className="inline-flex rounded-full border border-border bg-muted/30 p-1">
-                  <button
-                    onClick={() => setBillingPeriod("monthly")}
-                    className={`cursor-pointer rounded-full px-5 py-2 text-sm font-medium transition-all ${
-                      billingPeriod === "monthly"
-                        ? "bg-foreground text-background shadow-sm"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    Monthly
-                  </button>
-                  <button
-                    onClick={() => setBillingPeriod("annual")}
-                    className={`cursor-pointer rounded-full px-5 py-2 text-sm font-medium transition-all ${
-                      billingPeriod === "annual"
-                        ? "bg-foreground text-background shadow-sm"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    Annual
-                    <span className="ml-2 inline-flex rounded-full bg-green-500/15 px-2 py-0.5 text-[11px] font-semibold text-green-400">
-                      -20%
-                    </span>
-                  </button>
-                </div>
-              </div>
-
               {/* Plan Cards */}
               <div className="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
                 {PLAN_DEFS.map((plan) => {
@@ -676,10 +647,7 @@ export default function BillingPage() {
                   const isUpgrade = planIdx > currentIdx;
                   const isDowngrade = planIdx < currentIdx && planIdx > 0;
                   const isFree = plan.id === "free";
-                  const isAnnual = billingPeriod === "annual";
-                  const displayPrice = isAnnual && plan.price > 0
-                    ? +(plan.price * (1 - ANNUAL_DISCOUNT)).toFixed(2)
-                    : plan.price;
+                  const displayPrice = plan.price;
 
                   return (
                     <div
@@ -720,12 +688,7 @@ export default function BillingPage() {
                             <span className="ml-1 text-sm text-muted-foreground">/mo</span>
                           </div>
                         )}
-                        {isAnnual && !isFree && (
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            ${(displayPrice * 12).toFixed(2)} billed annually
-                          </p>
-                        )}
-                        {!isAnnual && !isFree && (
+                        {!isFree && (
                           <p className="mt-1 text-xs text-muted-foreground">Billed monthly</p>
                         )}
                         {isFree && (
@@ -760,24 +723,20 @@ export default function BillingPage() {
                         {!isCurrent && !isFree && !isPending && (
                           <button
                             onClick={() => {
-                              if (isAnnual) return;
                               handleChangePlan(plan.id as "starter" | "pro" | "team");
                             }}
-                            disabled={changingPlan || !!subscription?.pendingPlan || subscribingPlan === plan.id || isAnnual}
+                            disabled={changingPlan || !!subscription?.pendingPlan || subscribingPlan === plan.id}
                             className={`flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold transition-all disabled:opacity-50 ${
                               isUpgrade
                                 ? "bg-foreground text-background hover:opacity-90"
                                 : "border border-border hover:bg-muted"
-                            } ${isAnnual ? "cursor-not-allowed" : ""}`}
-                            title={isAnnual ? "Annual billing coming soon" : undefined}
+                            }`}
                           >
                             {subscribingPlan === plan.id ? (
                               <span className="flex items-center gap-2">
                                 <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
                                 Loading...
                               </span>
-                            ) : isAnnual ? (
-                              "Coming soon"
                             ) : !subscription?.active ? (
                               "Get Started"
                             ) : isUpgrade ? (

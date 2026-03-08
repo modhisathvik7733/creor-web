@@ -16,6 +16,7 @@ import {
   Key,
   BarChart3,
   LogOut,
+  Store,
 } from "lucide-react";
 
 const sidebarItems = [
@@ -26,6 +27,7 @@ const sidebarItems = [
   { href: "/dashboard/billing", label: "Billing", icon: CreditCard },
   { href: "/dashboard/keys", label: "API Keys", icon: Key },
   { href: "/dashboard/usage", label: "Usage", icon: BarChart3 },
+  { href: "/dashboard/marketplace", label: "Marketplace", icon: Store },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ];
 

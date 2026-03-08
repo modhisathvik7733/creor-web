@@ -23,14 +23,14 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   login: (token: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
   login: async () => {},
-  logout: () => {},
+  logout: async () => {},
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -63,7 +63,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await fetchUser();
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await api.logout();
+    } catch {
+      // Best-effort: clear local state even if the server call fails
+    }
     api.setToken(null);
     setUser(null);
   };
