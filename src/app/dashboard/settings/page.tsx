@@ -54,8 +54,8 @@ function ProviderKeysSection() {
       setEditingProvider(null);
       setApiKeyInput("");
       await loadCredentials();
-    } catch (err: any) {
-      toast.error(err.message ?? "Failed to save key");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to save key");
     } finally {
       setSavingProvider(null);
     }
@@ -70,8 +70,8 @@ function ProviderKeysSection() {
       } else {
         toast.error(result.error ?? "API key is invalid");
       }
-    } catch (err: any) {
-      toast.error(err.message ?? "Failed to test key");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to test key");
     } finally {
       setTestingProvider(null);
     }
@@ -83,8 +83,8 @@ function ProviderKeysSection() {
       await api.deleteProviderCredential(providerId);
       toast.success("API key removed");
       await loadCredentials();
-    } catch (err: any) {
-      toast.error(err.message ?? "Failed to remove key");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to remove key");
     } finally {
       setDeletingProvider(null);
     }

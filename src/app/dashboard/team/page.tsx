@@ -91,8 +91,8 @@ export default function TeamPage() {
       setInviteRole("member");
       setShowInviteForm(false);
       fetchInvites();
-    } catch (err: any) {
-      setInviteError(err.message ?? "Failed to send invite");
+    } catch (err: unknown) {
+      setInviteError(err instanceof Error ? err.message : "Failed to send invite");
     } finally {
       setInviteSubmitting(false);
     }
