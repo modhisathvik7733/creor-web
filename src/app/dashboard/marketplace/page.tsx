@@ -371,11 +371,6 @@ export default function MarketplacePage() {
                               <ShieldCheck className="h-3.5 w-3.5 text-foreground" />
                             )}
                           </div>
-                          {item.author && (
-                            <p className="text-xs text-muted-foreground">
-                              by {item.author}
-                            </p>
-                          )}
                         </div>
                       </div>
                       {installed ? (
