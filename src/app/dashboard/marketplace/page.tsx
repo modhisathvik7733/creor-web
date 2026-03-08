@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import {
@@ -27,9 +27,30 @@ import {
   Info,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { CATALOG, type CatalogItem } from "./catalog";
 
 // ── Types ──
+
+interface CatalogItem {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  category: string;
+  icon: string | null;
+  author: string | null;
+  serverType: string;
+  tags: string[];
+  featured: boolean;
+  verified: boolean;
+  installCount: number;
+  configParams: Array<{
+    key: string;
+    label: string;
+    placeholder: string;
+    required: boolean;
+    secret: boolean;
+  }>;
+}
 
 interface Installation {
   id: string;
@@ -94,10 +115,16 @@ function timeAgo(dateStr: string): string {
   return `${months} month${months > 1 ? "s" : ""} ago`;
 }
 
+function formatInstallCount(count: number): string {
+  if (count >= 1000) return `${(count / 1000).toFixed(1)}k`;
+  return String(count);
+}
+
 // ── Page ──
 
 export default function MarketplacePage() {
   const [tab, setTab] = useState<"browse" | "installed">("browse");
+  const [catalog, setCatalog] = useState<CatalogItem[]>([]);
   const [installations, setInstallations] = useState<Installation[]>([]);
   const [loading, setLoading] = useState(true);
   const [category, setCategory] = useState("All");
@@ -107,31 +134,17 @@ export default function MarketplacePage() {
   const [installing, setInstalling] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
-  // ── Client-side filtered catalog ──
+  // ── Data fetching ──
 
-  const filteredCatalog = useMemo(() => {
-    let items = CATALOG;
-
-    if (category !== "All") {
-      items = items.filter(
-        (item) => item.category.toLowerCase() === category.toLowerCase()
-      );
-    }
-
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      items = items.filter(
-        (item) =>
-          item.name.toLowerCase().includes(q) ||
-          item.description.toLowerCase().includes(q) ||
-          item.tags.some((t) => t.toLowerCase().includes(q))
-      );
-    }
-
-    return items;
-  }, [category, search]);
-
-  // ── Fetch installations from API ──
+  const fetchCatalog = () => {
+    const params: { category?: string; search?: string } = {};
+    if (category !== "All") params.category = category.toLowerCase();
+    if (search.trim()) params.search = search.trim();
+    api
+      .getMarketplaceCatalog(params)
+      .then(setCatalog)
+      .catch(() => {});
+  };
 
   const fetchInstallations = () => {
     api
@@ -141,12 +154,22 @@ export default function MarketplacePage() {
   };
 
   useEffect(() => {
-    api
-      .getMarketplaceInstallations()
-      .then(setInstallations)
+    Promise.all([
+      api.getMarketplaceCatalog(),
+      api.getMarketplaceInstallations(),
+    ])
+      .then(([c, i]) => {
+        setCatalog(c);
+        setInstallations(i);
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (!loading) fetchCatalog();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [category, search]);
 
   // ── Handlers ──
 
@@ -160,7 +183,10 @@ export default function MarketplacePage() {
     setInstalling(item.slug);
     try {
       await api.installMarketplaceItem(item.slug);
-      toast.success(`${item.name} installed! Your IDE will sync automatically.`);
+      toast.success(
+        `${item.name} installed! Your IDE will sync automatically.`
+      );
+      fetchCatalog();
       fetchInstallations();
     } catch {
       toast.error(`Failed to install ${item.name}`);
@@ -181,9 +207,12 @@ export default function MarketplacePage() {
     setInstalling(item.slug);
     try {
       await api.installMarketplaceItem(item.slug, configValues);
-      toast.success(`${item.name} installed! Your IDE will sync automatically.`);
+      toast.success(
+        `${item.name} installed! Your IDE will sync automatically.`
+      );
       setConfiguringSlug(null);
       setConfigValues({});
+      fetchCatalog();
       fetchInstallations();
     } catch {
       toast.error(`Failed to install ${item.name}`);
@@ -307,7 +336,7 @@ export default function MarketplacePage() {
           </div>
 
           {/* Catalog grid */}
-          {filteredCatalog.length === 0 ? (
+          {catalog.length === 0 ? (
             <div className="flex flex-col items-center justify-center rounded-xl border border-border bg-card py-16 text-center">
               <Store className="mb-3 h-8 w-8 text-muted-foreground" />
               <p className="text-sm text-muted-foreground">
@@ -316,7 +345,7 @@ export default function MarketplacePage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              {filteredCatalog.map((item) => {
+              {catalog.map((item) => {
                 const Icon = getIcon(item.icon);
                 const installed = isInstalled(item.slug);
                 const isConfiguring = configuringSlug === item.slug;
@@ -324,7 +353,7 @@ export default function MarketplacePage() {
 
                 return (
                   <div
-                    key={item.slug}
+                    key={item.id}
                     className="rounded-xl border border-border bg-card p-5 transition-colors hover:border-foreground/20"
                   >
                     {/* Card header */}
@@ -375,7 +404,7 @@ export default function MarketplacePage() {
                       {item.description}
                     </p>
 
-                    {/* Tags + type badge */}
+                    {/* Tags + meta */}
                     <div className="flex flex-wrap items-center gap-2">
                       <span
                         className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
@@ -394,6 +423,10 @@ export default function MarketplacePage() {
                           {tag}
                         </span>
                       ))}
+                      <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
+                        <Download className="h-3 w-3" />
+                        {formatInstallCount(item.installCount)}
+                      </span>
                     </div>
 
                     {/* Config form (inline) */}
@@ -434,7 +467,9 @@ export default function MarketplacePage() {
                             disabled={isInstallingThis}
                             className="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
                           >
-                            {isInstallingThis ? "Installing..." : "Save & Install"}
+                            {isInstallingThis
+                              ? "Installing..."
+                              : "Save & Install"}
                           </button>
                           <button
                             onClick={() => {
