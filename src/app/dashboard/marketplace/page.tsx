@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import {
@@ -24,32 +24,12 @@ import {
   Sparkles,
   ListTodo,
   Package,
+  Info,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { CATALOG, type CatalogItem } from "./catalog";
 
 // ── Types ──
-
-interface CatalogItem {
-  id: string;
-  slug: string;
-  name: string;
-  description: string;
-  category: string;
-  icon: string | null;
-  author: string | null;
-  serverType: string;
-  tags: string[];
-  featured: boolean;
-  verified: boolean;
-  installCount: number;
-  configParams: Array<{
-    key: string;
-    label: string;
-    placeholder: string;
-    required: boolean;
-    secret: boolean;
-  }>;
-}
 
 interface Installation {
   id: string;
@@ -89,7 +69,14 @@ function getIcon(name: string | null): LucideIcon {
 
 // ── Helpers ──
 
-const CATEGORIES = ["All", "Developer", "Productivity", "Communication", "Database", "AI"];
+const CATEGORIES = [
+  "All",
+  "Developer",
+  "Productivity",
+  "Communication",
+  "Database",
+  "AI",
+];
 
 function timeAgo(dateStr: string): string {
   const now = Date.now();
@@ -107,16 +94,10 @@ function timeAgo(dateStr: string): string {
   return `${months} month${months > 1 ? "s" : ""} ago`;
 }
 
-function formatInstallCount(count: number): string {
-  if (count >= 1000) return `${(count / 1000).toFixed(1)}k`;
-  return String(count);
-}
-
 // ── Page ──
 
 export default function MarketplacePage() {
   const [tab, setTab] = useState<"browse" | "installed">("browse");
-  const [catalog, setCatalog] = useState<CatalogItem[]>([]);
   const [installations, setInstallations] = useState<Installation[]>([]);
   const [loading, setLoading] = useState(true);
   const [category, setCategory] = useState("All");
@@ -126,17 +107,31 @@ export default function MarketplacePage() {
   const [installing, setInstalling] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
-  // ── Data fetching ──
+  // ── Client-side filtered catalog ──
 
-  const fetchCatalog = () => {
-    const params: { category?: string; search?: string } = {};
-    if (category !== "All") params.category = category;
-    if (search.trim()) params.search = search.trim();
-    api
-      .getMarketplaceCatalog(params)
-      .then(setCatalog)
-      .catch(() => {});
-  };
+  const filteredCatalog = useMemo(() => {
+    let items = CATALOG;
+
+    if (category !== "All") {
+      items = items.filter(
+        (item) => item.category.toLowerCase() === category.toLowerCase()
+      );
+    }
+
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      items = items.filter(
+        (item) =>
+          item.name.toLowerCase().includes(q) ||
+          item.description.toLowerCase().includes(q) ||
+          item.tags.some((t) => t.toLowerCase().includes(q))
+      );
+    }
+
+    return items;
+  }, [category, search]);
+
+  // ── Fetch installations from API ──
 
   const fetchInstallations = () => {
     api
@@ -146,22 +141,12 @@ export default function MarketplacePage() {
   };
 
   useEffect(() => {
-    Promise.all([
-      api.getMarketplaceCatalog(),
-      api.getMarketplaceInstallations(),
-    ])
-      .then(([c, i]) => {
-        setCatalog(c);
-        setInstallations(i);
-      })
+    api
+      .getMarketplaceInstallations()
+      .then(setInstallations)
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
-
-  useEffect(() => {
-    if (!loading) fetchCatalog();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [category, search]);
 
   // ── Handlers ──
 
@@ -175,7 +160,7 @@ export default function MarketplacePage() {
     setInstalling(item.slug);
     try {
       await api.installMarketplaceItem(item.slug);
-      toast.success(`${item.name} installed`);
+      toast.success(`${item.name} installed! Your IDE will sync automatically.`);
       fetchInstallations();
     } catch {
       toast.error(`Failed to install ${item.name}`);
@@ -196,7 +181,7 @@ export default function MarketplacePage() {
     setInstalling(item.slug);
     try {
       await api.installMarketplaceItem(item.slug, configValues);
-      toast.success(`${item.name} installed`);
+      toast.success(`${item.name} installed! Your IDE will sync automatically.`);
       setConfiguringSlug(null);
       setConfigValues({});
       fetchInstallations();
@@ -322,7 +307,7 @@ export default function MarketplacePage() {
           </div>
 
           {/* Catalog grid */}
-          {catalog.length === 0 ? (
+          {filteredCatalog.length === 0 ? (
             <div className="flex flex-col items-center justify-center rounded-xl border border-border bg-card py-16 text-center">
               <Store className="mb-3 h-8 w-8 text-muted-foreground" />
               <p className="text-sm text-muted-foreground">
@@ -331,7 +316,7 @@ export default function MarketplacePage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              {catalog.map((item) => {
+              {filteredCatalog.map((item) => {
                 const Icon = getIcon(item.icon);
                 const installed = isInstalled(item.slug);
                 const isConfiguring = configuringSlug === item.slug;
@@ -339,7 +324,7 @@ export default function MarketplacePage() {
 
                 return (
                   <div
-                    key={item.id}
+                    key={item.slug}
                     className="rounded-xl border border-border bg-card p-5 transition-colors hover:border-foreground/20"
                   >
                     {/* Card header */}
@@ -390,9 +375,18 @@ export default function MarketplacePage() {
                       {item.description}
                     </p>
 
-                    {/* Tags + meta */}
+                    {/* Tags + type badge */}
                     <div className="flex flex-wrap items-center gap-2">
-                      {item.tags.slice(0, 3).map((tag) => (
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                          item.serverType === "remote"
+                            ? "bg-blue-500/10 text-blue-400"
+                            : "bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        {item.serverType === "remote" ? "Cloud" : "Local"}
+                      </span>
+                      {item.tags.slice(0, 2).map((tag) => (
                         <span
                           key={tag}
                           className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
@@ -400,10 +394,6 @@ export default function MarketplacePage() {
                           {tag}
                         </span>
                       ))}
-                      <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
-                        <Download className="h-3 w-3" />
-                        {formatInstallCount(item.installCount)}
-                      </span>
                     </div>
 
                     {/* Config form (inline) */}
@@ -468,80 +458,94 @@ export default function MarketplacePage() {
 
       {/* ── Installed Tab ── */}
       {tab === "installed" && (
-        <div className="rounded-xl border border-border bg-card">
-          <div className="border-b border-border px-5 py-4">
-            <h2 className="font-semibold">
-              Installed MCP Servers{" "}
-              <span className="text-muted-foreground">
-                ({installations.length})
-              </span>
-            </h2>
+        <div className="space-y-4">
+          {/* Sync info banner */}
+          <div className="flex items-start gap-3 rounded-lg border border-border bg-card px-4 py-3">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+            <p className="text-xs text-muted-foreground">
+              Changes sync to your Creor IDE automatically. Restart your IDE if
+              changes don&apos;t appear immediately.
+            </p>
           </div>
-          {installations.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <Store className="mb-3 h-8 w-8 text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">
-                No MCP servers installed yet. Browse the catalog to get started.
-              </p>
-            </div>
-          ) : (
-            <div className="divide-y divide-border">
-              {installations.map((inst) => {
-                const Icon = getIcon(inst.catalog.icon);
-                const isToggling = togglingId === inst.id;
 
-                return (
-                  <div
-                    key={inst.id}
-                    className="flex items-center justify-between px-5 py-3.5"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
-                        <Icon className="h-4 w-4 text-muted-foreground" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium">
-                          {inst.catalog.name}
-                        </p>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium">
-                            {inst.catalog.category}
-                          </span>
-                          <span>Installed {timeAgo(inst.timeCreated)}</span>
+          <div className="rounded-xl border border-border bg-card">
+            <div className="border-b border-border px-5 py-4">
+              <h2 className="font-semibold">
+                Installed MCP Servers{" "}
+                <span className="text-muted-foreground">
+                  ({installations.length})
+                </span>
+              </h2>
+            </div>
+            {installations.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <Store className="mb-3 h-8 w-8 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">
+                  No MCP servers installed yet. Browse the catalog to get
+                  started.
+                </p>
+              </div>
+            ) : (
+              <div className="divide-y divide-border">
+                {installations.map((inst) => {
+                  const Icon = getIcon(inst.catalog.icon);
+                  const isToggling = togglingId === inst.id;
+
+                  return (
+                    <div
+                      key={inst.id}
+                      className="flex items-center justify-between px-5 py-3.5"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
+                          <Icon className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">
+                            {inst.catalog.name}
+                          </p>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium">
+                              {inst.catalog.category}
+                            </span>
+                            <span>
+                              Installed {timeAgo(inst.timeCreated)}
+                            </span>
+                          </div>
                         </div>
                       </div>
+                      <div className="flex items-center gap-3">
+                        {/* Toggle */}
+                        <button
+                          onClick={() => handleToggle(inst)}
+                          disabled={isToggling}
+                          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                            inst.enabled ? "bg-foreground" : "bg-muted"
+                          } ${isToggling ? "opacity-50" : ""}`}
+                          title={inst.enabled ? "Disable" : "Enable"}
+                        >
+                          <span
+                            className={`inline-block h-3.5 w-3.5 rounded-full transition-transform ${
+                              inst.enabled
+                                ? "translate-x-4 bg-background"
+                                : "translate-x-1 bg-muted-foreground"
+                            }`}
+                          />
+                        </button>
+                        {/* Uninstall */}
+                        <button
+                          onClick={() => handleUninstall(inst)}
+                          className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      {/* Toggle */}
-                      <button
-                        onClick={() => handleToggle(inst)}
-                        disabled={isToggling}
-                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                          inst.enabled ? "bg-foreground" : "bg-muted"
-                        } ${isToggling ? "opacity-50" : ""}`}
-                        title={inst.enabled ? "Disable" : "Enable"}
-                      >
-                        <span
-                          className={`inline-block h-3.5 w-3.5 rounded-full transition-transform ${
-                            inst.enabled
-                              ? "translate-x-4 bg-background"
-                              : "translate-x-1 bg-muted-foreground"
-                          }`}
-                        />
-                      </button>
-                      {/* Uninstall */}
-                      <button
-                        onClick={() => handleUninstall(inst)}
-                        className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
