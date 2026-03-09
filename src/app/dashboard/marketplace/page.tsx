@@ -28,6 +28,7 @@ import {
   Info,
   Plug,
   ArrowUpRight,
+  ExternalLink,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -52,6 +53,7 @@ interface CatalogItem {
     placeholder: string;
     required: boolean;
     secret: boolean;
+    helpUrl?: string;
   }>;
 }
 
@@ -468,14 +470,27 @@ export default function MarketplacePage() {
                         <div className="space-y-2.5">
                           {item.configParams.map((param) => (
                             <div key={param.key}>
-                              <label className="mb-1 block text-[11px] text-muted-foreground">
-                                {param.label}
-                                {param.required && (
-                                  <span className="ml-0.5 text-foreground">
-                                    *
-                                  </span>
+                              <div className="mb-1 flex items-center gap-1.5">
+                                <label className="text-[11px] text-muted-foreground">
+                                  {param.label}
+                                  {param.required && (
+                                    <span className="ml-0.5 text-foreground">
+                                      *
+                                    </span>
+                                  )}
+                                </label>
+                                {param.helpUrl && (
+                                  <a
+                                    href={param.helpUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground transition-colors hover:text-foreground"
+                                  >
+                                    Get token
+                                    <ExternalLink className="h-2.5 w-2.5" />
+                                  </a>
                                 )}
-                              </label>
+                              </div>
                               <input
                                 type={param.secret ? "password" : "text"}
                                 value={configValues[param.key] ?? ""}
