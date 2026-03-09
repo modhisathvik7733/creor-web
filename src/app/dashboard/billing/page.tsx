@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
+import { useBillingRealtime } from "@/hooks/use-billing-realtime";
 import {
   CreditCard,
   Plus,
@@ -184,7 +185,8 @@ interface Payment {
 const CREDIT_PRESETS = [5, 10, 25, 50];
 const MIN_CREDIT = 1;
 
-const PLAN_DEFS = [
+// Fallback plan definitions — used until API responds
+const PLAN_DEFS_FALLBACK = [
   {
     id: "free",
     name: "Free",
@@ -231,6 +233,7 @@ export default function BillingPage() {
   const [quota, setQuota] = useState<QuotaInfo | null>(null);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [planDefs, setPlanDefs] = useState(PLAN_DEFS_FALLBACK);
   const [loading, setLoading] = useState(true);
   const [addingCredits, setAddingCredits] = useState(false);
   const [creditAmount, setCreditAmount] = useState(5);
@@ -266,11 +269,20 @@ export default function BillingPage() {
     } finally {
       setLoading(false);
     }
+    // Fetch plan definitions separately (non-blocking, cacheable)
+    api.getPlans().then(({ plans }) => {
+      if (plans.length > 0) {
+        setPlanDefs(plans);
+      }
+    }).catch(() => {/* keep fallback */});
   }, []);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Real-time billing updates via Supabase Realtime
+  useBillingRealtime(fetchData);
 
   // Check URL params for post-checkout redirect
   useEffect(() => {
@@ -424,8 +436,8 @@ export default function BillingPage() {
       return;
     }
 
-    const currentIdx = PLAN_DEFS.findIndex((p) => p.id === currentPlanId);
-    const newIdx = PLAN_DEFS.findIndex((p) => p.id === planId);
+    const currentIdx = planDefs.findIndex((p) => p.id === currentPlanId);
+    const newIdx = planDefs.findIndex((p) => p.id === planId);
     const isDowngrade = newIdx < currentIdx;
 
     if (isDowngrade) {
@@ -639,11 +651,11 @@ export default function BillingPage() {
             <div className="px-8 py-6">
               {/* Plan Cards */}
               <div className="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
-                {PLAN_DEFS.map((plan) => {
+                {planDefs.map((plan) => {
                   const isCurrent = plan.id === currentPlanId;
                   const isPending = subscription?.pendingPlan === plan.id;
-                  const currentIdx = PLAN_DEFS.findIndex((p) => p.id === currentPlanId);
-                  const planIdx = PLAN_DEFS.findIndex((p) => p.id === plan.id);
+                  const currentIdx = planDefs.findIndex((p) => p.id === currentPlanId);
+                  const planIdx = planDefs.findIndex((p) => p.id === plan.id);
                   const isUpgrade = planIdx > currentIdx;
                   const isDowngrade = planIdx < currentIdx && planIdx > 0;
                   const isFree = plan.id === "free";

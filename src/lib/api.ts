@@ -229,6 +229,28 @@ class ApiClient {
     return this.post<{ success: boolean; message: string }>("/api/billing/reset-test", {});
   }
 
+  async getPlans() {
+    return this.get<{
+      plans: Array<{
+        id: string;
+        name: string;
+        price: number;
+        currency: string;
+        monthlyLimit: number | null;
+        features: string[];
+      }>;
+    }>("/api/billing/plans");
+  }
+
+  async getBillingRealtimeConfig() {
+    return this.get<{
+      supabaseUrl: string;
+      anonKey: string;
+      workspaceId: string;
+      tables: string[];
+    }>("/api/billing/realtime-config");
+  }
+
   async getPayments(page = 1, limit = 20) {
     return this.get<{
       payments: Array<{
