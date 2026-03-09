@@ -389,7 +389,9 @@ export default function MarketplacePage() {
                 return (
                   <div
                     key={item.id}
-                    className="group rounded-lg border border-border p-4 transition-colors hover:bg-muted/30"
+                    className={`group rounded-lg border border-border p-4 transition-colors hover:bg-muted/30 ${
+                      isConfiguring ? "col-span-full" : ""
+                    }`}
                   >
                     {/* Card header */}
                     <div className="mb-2.5 flex items-start justify-between">
