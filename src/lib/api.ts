@@ -561,6 +561,15 @@ class ApiClient {
     );
   }
 
+  async getMarketplaceRealtimeConfig() {
+    return this.get<{
+      supabaseUrl: string;
+      anonKey: string;
+      workspaceId: string;
+      table: string;
+    }>("/api/marketplace/realtime-config");
+  }
+
   // ── Share ──
 
   async getShare(id: string) {
