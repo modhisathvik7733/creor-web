@@ -40,7 +40,12 @@ export function useMarketplaceRealtime(onUpdate: () => void) {
           },
           () => onUpdate()
         )
-        .subscribe();
+        .subscribe((status) => {
+          // Catch-up fetch when channel connects/reconnects to pick up any missed events
+          if (status === "SUBSCRIBED") {
+            onUpdate();
+          }
+        });
 
       channelRef.current = channel;
     } catch {
