@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { api } from "@/lib/api";
+import { GridBackground } from "@/components/grid-background";
 import { Suspense } from "react";
 
 function CallbackContent() {
@@ -88,10 +89,37 @@ function CallbackContent() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center space-y-3">
-        <div className="h-5 w-5 mx-auto animate-spin rounded-full border-2 border-border border-t-foreground" />
-        <p className="text-sm text-foreground-secondary">Signing you in...</p>
+    <div className="relative flex min-h-screen items-center justify-center bg-background p-4 overflow-hidden">
+      <GridBackground />
+      <div className="relative z-10 flex flex-col items-center justify-center p-8 sm:p-12 rounded-3xl border border-white/5 bg-white/[0.02] shadow-[0_0_80px_rgba(0,0,0,0.5)] backdrop-blur-2xl">
+        <div className="absolute inset-0 rounded-3xl bg-gradient-to-b from-white/[0.08] to-transparent pointer-events-none" />
+        
+        <div className="relative mb-8 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-tr from-zinc-800 to-zinc-700 shadow-[inset_0_1px_1px_rgba(255,255,255,0.2),0_4px_20px_rgba(0,0,0,0.5)]">
+          <svg
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="text-white"
+          >
+            <polyline points="16 18 22 12 16 6" />
+            <polyline points="8 6 2 12 8 18" />
+          </svg>
+        </div>
+
+        <div className="mb-6 relative flex h-12 w-12 items-center justify-center">
+          <div className="absolute h-full w-full animate-[spin_3s_linear_infinite] rounded-full border border-white/10" />
+          <div className="absolute h-full w-full animate-[spin_1.5s_ease-in-out_infinite] rounded-full border-2 border-transparent border-t-white shadow-[0_0_15px_rgba(255,255,255,0.5)]" />
+        </div>
+
+        <h2 className="text-lg font-semibold tracking-tight text-white/90">Authenticating</h2>
+        <p className="mt-2 text-sm text-white/50 text-center max-w-[200px] leading-relaxed">
+          Please wait while we securely log you in to Creor.
+        </p>
       </div>
     </div>
   );
@@ -101,8 +129,8 @@ export default function AuthCallbackPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center bg-background">
-          <div className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-foreground" />
+        <div className="relative flex min-h-screen items-center justify-center bg-background p-4 overflow-hidden">
+          <GridBackground />
         </div>
       }
     >
