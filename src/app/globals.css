@@ -121,3 +121,28 @@ body {
 .animate-toast-in {
   animation: toast-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0E0E0E;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #222222;
+  border: 3px solid #0E0E0E;
+  border-radius: 6px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #333333;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #222222 #0E0E0E;
+}

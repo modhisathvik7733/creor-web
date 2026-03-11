@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { cn } from "@/lib/utils";
 import { Search, ChevronRight } from "lucide-react";
 
 export default function DocsLayout({
@@ -8,6 +10,9 @@ export default function DocsLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
+  const isApi = pathname.startsWith("/docs/api");
+
   return (
     <div className="min-h-screen bg-[#0E0E0E] text-[#EDEDED] font-sans selection:bg-[#FF6A13] selection:text-white">
       {/* Top Navbar */}
@@ -33,16 +38,23 @@ export default function DocsLayout({
           <nav className="hidden h-full items-center gap-1 md:flex">
             <Link
               href="/docs"
-              className="relative flex h-full items-center px-4 text-[13px] font-medium text-[#FF6A13]"
+              className={cn(
+                "relative flex h-full items-center px-4 text-[13px] transition-colors hover:text-[#EDEDED]",
+                !isApi ? "font-medium text-[#FF6A13]" : "text-[#A1A1A1]"
+              )}
             >
               Docs
-              <div className="absolute bottom-[-1px] left-0 right-0 h-[2px] bg-[#FF6A13]" />
+              {!isApi && <div className="absolute bottom-[-1px] left-0 right-0 h-[2px] bg-[#FF6A13]" />}
             </Link>
             <Link
-              href="/api"
-              className="flex h-full items-center px-4 text-[13px] text-[#A1A1A1] transition-colors hover:text-[#EDEDED]"
+              href="/docs/api"
+              className={cn(
+                "relative flex h-full items-center px-4 text-[13px] transition-colors hover:text-[#EDEDED]",
+                isApi ? "font-medium text-[#FF6A13]" : "text-[#A1A1A1]"
+              )}
             >
               API
+              {isApi && <div className="absolute bottom-[-1px] left-0 right-0 h-[2px] bg-[#FF6A13]" />}
             </Link>
             <Link
               href="/learn"
@@ -87,78 +99,124 @@ export default function DocsLayout({
       <div className="flex mx-auto w-full">
         {/* Left Sidebar */}
         <aside className="sticky top-[52px] hidden h-[calc(100vh-52px)] w-[260px] shrink-0 overflow-y-auto border-r border-[#222222] py-8 pl-6 pr-4 md:block">
-          <div className="space-y-8">
-            <div>
-              <h4 className="mb-3 px-2 text-[11px] font-semibold uppercase tracking-wider text-[#A1A1A1]">
-                Get Started
-              </h4>
-              <div className="flex flex-col space-y-0.5 text-[14px]">
-                <Link href="/docs" className="rounded-md px-2 py-1.5 font-medium text-[#FF6A13] transition-colors">
-                  Welcome
-                </Link>
-                <Link href="/docs/quickstart" className="rounded-md px-2 py-1.5 text-[#A1A1A1] hover:bg-[#1A1A1A] hover:text-[#EDEDED] transition-colors">
-                  Quickstart
-                </Link>
-                <div className="flex items-center justify-between group rounded-md px-2 py-1.5 text-[#A1A1A1] hover:bg-[#1A1A1A] hover:text-[#EDEDED] transition-colors cursor-pointer">
-                  <span>Models & Pricing</span>
-                  <ChevronRight className="h-4 w-4 opacity-0 transition-opacity group-hover:opacity-100" />
+          {isApi ? (
+            <div className="space-y-8">
+              <div>
+                <h4 className="mb-3 px-2 text-[11px] font-semibold uppercase tracking-wider text-[#A1A1A1]">
+                  API Overview
+                </h4>
+                <div className="flex flex-col space-y-0.5 text-[14px]">
+                  <Link href="/docs/api" className="rounded-md px-2 py-1.5 font-medium text-[#FF6A13] transition-colors">
+                    Overview
+                  </Link>
+                  {["Authentication", "Rate Limits", "Best Practices"].map((item) => (
+                    <Link key={item} href={`/docs/api/${item.toLowerCase().replace(' ', '-')}`} className="rounded-md px-2 py-1.5 text-[#A1A1A1] hover:bg-[#1A1A1A] hover:text-[#EDEDED] transition-colors">
+                      {item}
+                    </Link>
+                  ))}
                 </div>
-                <Link href="/docs/changelog" className="rounded-md px-2 py-1.5 text-[#A1A1A1] hover:bg-[#1A1A1A] hover:text-[#EDEDED] transition-colors">
-                  Changelog
-                </Link>
               </div>
-            </div>
 
-            <div>
-              <h4 className="mb-3 px-2 text-[11px] font-semibold uppercase tracking-wider text-[#A1A1A1]">
-                Agent
-              </h4>
-              <div className="flex flex-col space-y-0.5 text-[14px]">
-                {["Overview", "Planning", "Prompting", "Debugging"].map((item) => (
-                  <Link key={item} href={`/docs/${item.toLowerCase()}`} className="rounded-md px-2 py-1.5 text-[#A1A1A1] hover:bg-[#1A1A1A] hover:text-[#EDEDED] transition-colors flex items-center justify-between group">
-                    <span>{item}</span>
-                  </Link>
-                ))}
-                
-                <div className="flex items-center justify-between group rounded-md px-2 py-1.5 text-[#A1A1A1] hover:bg-[#1A1A1A] hover:text-[#EDEDED] transition-colors cursor-pointer">
-                  <span>Tools</span>
-                  <ChevronRight className="h-4 w-4 opacity-0 transition-opacity group-hover:opacity-100" />
+              <div>
+                <h4 className="mb-3 px-2 text-[11px] font-semibold uppercase tracking-wider text-[#A1A1A1]">
+                  Cloud Agents API
+                </h4>
+                <div className="flex flex-col space-y-0.5 text-[14px]">
+                  {["Overview", "List Agents", "Agent Status", "Agent Conversation", "List Artifacts", "Download Artifact", "Launch Agent", "Add Follow-up", "Stop Agent", "Delete Agent", "API Key Info", "List Models", "List Repositories", "Webhooks"].map((item) => (
+                    <Link key={item} href={`/docs/api/cloud-agents/${item.toLowerCase().replace(/ /g, '-')}`} className="rounded-md px-2 py-1.5 text-[#A1A1A1] hover:bg-[#1A1A1A] hover:text-[#EDEDED] transition-colors">
+                      {item}
+                    </Link>
+                  ))}
                 </div>
+              </div>
 
-                {["Parallel Agents", "Security"].map((item) => (
-                  <Link key={item} href={`/docs/${item.toLowerCase().replace(' ', '-')}`} className="rounded-md px-2 py-1.5 text-[#A1A1A1] hover:bg-[#1A1A1A] hover:text-[#EDEDED] transition-colors flex items-center justify-between group">
-                    <span>{item}</span>
-                  </Link>
-                ))}
+              <div>
+                <h4 className="mb-3 px-2 text-[11px] font-semibold uppercase tracking-wider text-[#A1A1A1]">
+                  Admin API
+                </h4>
+                 <div className="flex flex-col space-y-0.5 text-[14px]">
+                  {["Overview", "Team Members", "Audit Logs", "Get Daily Usage Data", "Spending Data", "Get Usage Events Data", "User Spend Limit"].map((item) => (
+                    <Link key={item} href={`/docs/api/admin/${item.toLowerCase().replace(/ /g, '-')}`} className="rounded-md px-2 py-1.5 text-[#A1A1A1] hover:bg-[#1A1A1A] hover:text-[#EDEDED] transition-colors">
+                      {item}
+                    </Link>
+                  ))}
+                </div>
               </div>
             </div>
-
-            <div>
-              <h4 className="mb-3 px-2 text-[11px] font-semibold uppercase tracking-wider text-[#A1A1A1]">
-                Customizing
-              </h4>
-              <div className="flex flex-col space-y-0.5 text-[14px]">
-                {["Plugins", "Rules", "Skills", "Subagents", "Hooks", "MCP"].map((item) => (
-                  <Link key={item} href={`/docs/${item.toLowerCase()}`} className="rounded-md px-2 py-1.5 text-[#A1A1A1] hover:bg-[#1A1A1A] hover:text-[#EDEDED] transition-colors">
-                    {item}
+          ) : (
+            <div className="space-y-8">
+              <div>
+                <h4 className="mb-3 px-2 text-[11px] font-semibold uppercase tracking-wider text-[#A1A1A1]">
+                  Get Started
+                </h4>
+                <div className="flex flex-col space-y-0.5 text-[14px]">
+                  <Link href="/docs" className="rounded-md px-2 py-1.5 font-medium text-[#FF6A13] transition-colors">
+                    Welcome
                   </Link>
-                ))}
+                  <Link href="/docs/quickstart" className="rounded-md px-2 py-1.5 text-[#A1A1A1] hover:bg-[#1A1A1A] hover:text-[#EDEDED] transition-colors">
+                    Quickstart
+                  </Link>
+                  <div className="flex items-center justify-between group rounded-md px-2 py-1.5 text-[#A1A1A1] hover:bg-[#1A1A1A] hover:text-[#EDEDED] transition-colors cursor-pointer">
+                    <span>Models & Pricing</span>
+                    <ChevronRight className="h-4 w-4 opacity-0 transition-opacity group-hover:opacity-100" />
+                  </div>
+                  <Link href="/docs/changelog" className="rounded-md px-2 py-1.5 text-[#A1A1A1] hover:bg-[#1A1A1A] hover:text-[#EDEDED] transition-colors">
+                    Changelog
+                  </Link>
+                </div>
+              </div>
+
+              <div>
+                <h4 className="mb-3 px-2 text-[11px] font-semibold uppercase tracking-wider text-[#A1A1A1]">
+                  Agent
+                </h4>
+                <div className="flex flex-col space-y-0.5 text-[14px]">
+                  {["Overview", "Planning", "Prompting", "Debugging"].map((item) => (
+                    <Link key={item} href={`/docs/${item.toLowerCase()}`} className="rounded-md px-2 py-1.5 text-[#A1A1A1] hover:bg-[#1A1A1A] hover:text-[#EDEDED] transition-colors flex items-center justify-between group">
+                      <span>{item}</span>
+                    </Link>
+                  ))}
+                  
+                  <div className="flex items-center justify-between group rounded-md px-2 py-1.5 text-[#A1A1A1] hover:bg-[#1A1A1A] hover:text-[#EDEDED] transition-colors cursor-pointer">
+                    <span>Tools</span>
+                    <ChevronRight className="h-4 w-4 opacity-0 transition-opacity group-hover:opacity-100" />
+                  </div>
+
+                  {["Parallel Agents", "Security"].map((item) => (
+                    <Link key={item} href={`/docs/${item.toLowerCase().replace(' ', '-')}`} className="rounded-md px-2 py-1.5 text-[#A1A1A1] hover:bg-[#1A1A1A] hover:text-[#EDEDED] transition-colors flex items-center justify-between group">
+                      <span>{item}</span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <h4 className="mb-3 px-2 text-[11px] font-semibold uppercase tracking-wider text-[#A1A1A1]">
+                  Customizing
+                </h4>
+                <div className="flex flex-col space-y-0.5 text-[14px]">
+                  {["Plugins", "Rules", "Skills", "Subagents", "Hooks", "MCP"].map((item) => (
+                    <Link key={item} href={`/docs/${item.toLowerCase()}`} className="rounded-md px-2 py-1.5 text-[#A1A1A1] hover:bg-[#1A1A1A] hover:text-[#EDEDED] transition-colors">
+                      {item}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <h4 className="mb-3 px-2 text-[11px] font-semibold uppercase tracking-wider text-[#A1A1A1]">
+                  Cloud Agents
+                </h4>
+                 <div className="flex flex-col space-y-0.5 text-[14px]">
+                  {["Overview", "Setup", "Capabilities", "Bugbot", "Best Practices", "Security & Network", "Settings"].map((item) => (
+                    <Link key={item} href={`/docs/${item.toLowerCase().replace(' & ', '-').replace(' ', '-')}`} className="rounded-md px-2 py-1.5 text-[#A1A1A1] hover:bg-[#1A1A1A] hover:text-[#EDEDED] transition-colors">
+                      {item}
+                    </Link>
+                  ))}
+                </div>
               </div>
             </div>
-
-            <div>
-              <h4 className="mb-3 px-2 text-[11px] font-semibold uppercase tracking-wider text-[#A1A1A1]">
-                Cloud Agents
-              </h4>
-               <div className="flex flex-col space-y-0.5 text-[14px]">
-                {["Overview", "Setup", "Capabilities", "Bugbot", "Best Practices", "Security & Network", "Settings"].map((item) => (
-                  <Link key={item} href={`/docs/${item.toLowerCase().replace(' & ', '-').replace(' ', '-')}`} className="rounded-md px-2 py-1.5 text-[#A1A1A1] hover:bg-[#1A1A1A] hover:text-[#EDEDED] transition-colors">
-                    {item}
-                  </Link>
-                ))}
-              </div>
-            </div>
-          </div>
+          )}
         </aside>
 
         {/* Main Area */}
