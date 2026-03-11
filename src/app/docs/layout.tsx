@@ -79,13 +79,6 @@ export default function DocsLayout({
               <span className="text-[11px]">⌘</span>K
             </span>
           </button>
-          
-          <button className="flex h-8 items-center gap-1.5 rounded-md border border-[#333333] bg-[#141414] px-3 text-[13px] text-[#A1A1A1] transition-colors hover:bg-[#1A1A1A] hover:text-[#EDEDED]">
-            <span>Ask AI</span>
-            <span className="flex items-center gap-0.5 rounded-sm bg-[#222222] px-1.5 py-0.5 text-[10px] uppercase font-mono">
-              <span className="text-[11px]">⌘</span>I
-            </span>
-          </button>
 
           <Link
             href="/dashboard"
@@ -134,7 +127,7 @@ export default function DocsLayout({
                 <h4 className="mb-3 px-2 text-[11px] font-semibold uppercase tracking-wider text-[#A1A1A1]">
                   Admin API
                 </h4>
-                 <div className="flex flex-col space-y-0.5 text-[14px]">
+                <div className="flex flex-col space-y-0.5 text-[14px]">
                   {["Overview", "Team Members", "Audit Logs", "Get Daily Usage Data", "Spending Data", "Get Usage Events Data", "User Spend Limit"].map((item) => (
                     <Link key={item} href={`/docs/api/admin/${item.toLowerCase().replace(/ /g, '-')}`} className="rounded-md px-2 py-1.5 text-[#A1A1A1] hover:bg-[#1A1A1A] hover:text-[#EDEDED] transition-colors">
                       {item}
@@ -176,7 +169,7 @@ export default function DocsLayout({
                       <span>{item}</span>
                     </Link>
                   ))}
-                  
+
                   <div className="flex items-center justify-between group rounded-md px-2 py-1.5 text-[#A1A1A1] hover:bg-[#1A1A1A] hover:text-[#EDEDED] transition-colors cursor-pointer">
                     <span>Tools</span>
                     <ChevronRight className="h-4 w-4 opacity-0 transition-opacity group-hover:opacity-100" />
@@ -207,7 +200,7 @@ export default function DocsLayout({
                 <h4 className="mb-3 px-2 text-[11px] font-semibold uppercase tracking-wider text-[#A1A1A1]">
                   Cloud Agents
                 </h4>
-                 <div className="flex flex-col space-y-0.5 text-[14px]">
+                <div className="flex flex-col space-y-0.5 text-[14px]">
                   {["Overview", "Setup", "Capabilities", "Bugbot", "Best Practices", "Security & Network", "Settings"].map((item) => (
                     <Link key={item} href={`/docs/${item.toLowerCase().replace(' & ', '-').replace(' ', '-')}`} className="rounded-md px-2 py-1.5 text-[#A1A1A1] hover:bg-[#1A1A1A] hover:text-[#EDEDED] transition-colors">
                       {item}

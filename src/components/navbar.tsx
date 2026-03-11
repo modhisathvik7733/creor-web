@@ -73,12 +73,6 @@ const navItems: NavItem[] = [
     label: "Resources",
     items: [
       {
-        label: "Docs",
-        href: "/docs",
-        description: "Guides and API reference",
-        icon: BookOpen,
-      },
-      {
         label: "Blog",
         href: "/blog",
         description: "Updates and announcements",
@@ -94,6 +88,7 @@ const navItems: NavItem[] = [
   },
   { label: "Pricing", href: "/pricing" },
   { label: "Enterprise", href: "/enterprise" },
+  { label: "Docs", href: "/docs" },
 ];
 
 function Dropdown({
@@ -161,10 +156,10 @@ function MobileMenu({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-40 bg-background md:hidden">
-      <div className="flex h-full flex-col overflow-y-auto px-6 pb-8 pt-16">
+    <div className="fixed inset-0 z-40 bg-black/95 backdrop-blur-2xl md:hidden">
+      <div className="flex h-full flex-col overflow-y-auto px-6 pb-8 pt-20">
         {navItems.map((item) => (
-          <div key={item.label} className="border-b border-border py-4">
+          <div key={item.label} className="border-b border-white/[0.05] py-4">
             {"items" in item && item.items ? (
               <>
                 <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
@@ -197,18 +192,18 @@ function MobileMenu({
         ))}
         <div className="mt-auto space-y-3 pt-6">
           <Link
-            href="/dashboard"
+            href="/login"
             onClick={onClose}
-            className="block w-full rounded-full bg-foreground py-2.5 text-center text-[13px] font-medium text-background"
+            className="block w-full rounded-full bg-foreground py-2.5 text-center text-[13px] font-semibold text-background transition-transform active:scale-95"
           >
-            Download
+            Sign in
           </Link>
           <Link
-            href="/docs"
+            href="/download"
             onClick={onClose}
-            className="block w-full rounded-full border border-border py-2.5 text-center text-[13px] font-medium text-foreground"
+            className="block w-full rounded-full border border-white/10 bg-white/5 py-2.5 text-center text-[13px] font-medium text-foreground transition-transform active:scale-95"
           >
-            Documentation
+            Download
           </Link>
         </div>
       </div>
@@ -264,28 +259,28 @@ export function Navbar() {
       <nav
         ref={navRef}
         className={cn(
-          "fixed top-0 z-50 w-full transition-all duration-300",
+          "fixed top-0 z-50 w-full transition-all duration-500",
           scrolled
-            ? "border-b border-border bg-background/80 backdrop-blur-xl"
+            ? "border-b border-white/[0.08] bg-black/60 backdrop-blur-[20px] shadow-[0_4px_30px_rgba(0,0,0,0.5)]"
             : "border-b border-transparent bg-transparent"
         )}
       >
-        <div className="h-px w-full bg-gradient-to-r from-transparent via-foreground/20 to-transparent" />
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-50" />
         <div className="flex h-16 items-center justify-between px-8">
           {/* Left: Logo + Nav */}
           <div className="flex items-center gap-8">
             <Link href="/" className="flex items-center gap-2.5 transition-opacity hover:opacity-70">
               <div className="flex h-7 w-7 items-center justify-center rounded-[7px] bg-foreground">
                 <svg
-                  width="14"
-                  height="14"
+                  width="13"
+                  height="13"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
-                  strokeWidth="2.5"
+                  strokeWidth="3"
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  className="text-background"
+                  className="text-black"
                 >
                   <polyline points="16 18 22 12 16 6" />
                   <polyline points="8 6 2 12 8 18" />
@@ -316,11 +311,19 @@ export function Navbar() {
                           )
                         }
                         className={cn(
-                          "relative flex items-center gap-1.5 rounded-md px-3.5 py-2 text-[15px] text-foreground-secondary transition-colors hover:text-foreground after:absolute after:bottom-0.5 after:left-3.5 after:right-3.5 after:h-px after:bg-foreground after:opacity-0 after:transition-opacity hover:after:opacity-100",
-                          openDropdown === item.label && "text-foreground after:opacity-100"
+                          "relative group flex items-center gap-1.5 rounded-md px-3.5 py-2 text-[14px] font-medium transition-all",
+                          openDropdown === item.label
+                            ? "text-white"
+                            : "text-white/50 hover:text-white"
                         )}
                       >
-                        {item.label}
+                        <span>{item.label}</span>
+                        <span
+                          className={cn(
+                            "absolute inset-x-3.5 bottom-1.5 h-px bg-white/20 transition-all origin-left",
+                            openDropdown === item.label ? "scale-x-100" : "scale-x-0 group-hover:scale-x-100"
+                          )}
+                        />
                         <ChevronDown
                           className={cn(
                             "h-4 w-4 transition-transform duration-200",
@@ -341,9 +344,10 @@ export function Navbar() {
                   <Link
                     key={item.label}
                     href={item.href!}
-                    className="relative rounded-md px-3.5 py-2 text-[15px] text-foreground-secondary transition-colors hover:text-foreground after:absolute after:bottom-0.5 after:left-3.5 after:right-3.5 after:h-px after:bg-foreground after:opacity-0 after:transition-opacity hover:after:opacity-100"
+                    className="relative group rounded-md px-3.5 py-2 text-[14px] font-medium text-white/50 transition-all hover:text-white"
                   >
-                    {item.label}
+                    <span>{item.label}</span>
+                    <span className="absolute inset-x-3.5 bottom-1.5 h-px bg-white/20 scale-x-0 transition-transform origin-left group-hover:scale-x-100" />
                   </Link>
                 );
               })}
@@ -351,17 +355,18 @@ export function Navbar() {
           </div>
 
           {/* Right */}
-          <div className="hidden items-center gap-4 md:flex">
+          <div className="hidden items-center gap-2 md:flex">
             <Link
-              href="/docs"
-              className="rounded-md px-3 py-2 text-[15px] text-foreground-secondary transition-colors hover:text-foreground"
+              href="/login"
+              className="rounded-md px-5 py-2 text-[14px] font-medium text-foreground-secondary transition-colors hover:text-foreground"
             >
-              Docs
+              Sign in
             </Link>
             <Link
-              href="/dashboard"
-              className="group inline-flex items-center gap-2 rounded-full bg-foreground px-5 py-2 text-[15px] font-medium text-background transition-all hover:shadow-[0_0_20px_rgba(0,0,0,0.15)] dark:hover:shadow-[0_0_20px_rgba(255,255,255,0.1)]"
+              href="/download"
+              className="group relative inline-flex items-center gap-2 overflow-hidden rounded-full bg-foreground px-6 py-2.5 text-[14px] font-semibold text-background transition-all hover:scale-[1.02] active:scale-[0.98] shadow-[0_0_25px_rgba(255,255,255,0.1)]"
             >
+              <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent pointer-events-none" />
               Download
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
             </Link>
