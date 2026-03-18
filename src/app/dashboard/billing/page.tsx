@@ -20,6 +20,7 @@ import {
   ChevronDown,
   ExternalLink,
   Check,
+  Settings2,
 } from "lucide-react";
 
 // ── Toast System ──
@@ -155,6 +156,9 @@ interface QuotaInfo {
   blockReason: string | null;
   warnings: string[];
   overageActive: boolean;
+  credits?: { added: number; spent: number; balance: number } | null;
+  spendLimit: number | null;
+  planLimit: number | null;
 }
 
 interface Subscription {
@@ -247,6 +251,9 @@ export default function BillingPage() {
   const [expandedPayment, setExpandedPayment] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"billing" | "invoices">("billing");
   const [showPlanModal, setShowPlanModal] = useState(false);
+  const [showLimitModal, setShowLimitModal] = useState(false);
+  const [limitInput, setLimitInput] = useState("");
+  const [savingLimit, setSavingLimit] = useState(false);
   // billingPeriod removed — annual billing not yet wired to API
 
   const { toasts, push: pushToast, dismiss: dismissToast } = useToasts();
@@ -296,6 +303,10 @@ export default function BillingPage() {
       window.history.replaceState({}, "", window.location.pathname);
       const timer = setTimeout(() => fetchData(), 2000);
       return () => clearTimeout(timer);
+    }
+    if (params.get("action") === "spend-limit") {
+      setShowLimitModal(true);
+      window.history.replaceState({}, "", window.location.pathname);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -388,13 +399,14 @@ export default function BillingPage() {
   // Close modal on Escape
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && showPlanModal) {
-        setShowPlanModal(false);
+      if (e.key === "Escape") {
+        if (showPlanModal) setShowPlanModal(false);
+        if (showLimitModal) setShowLimitModal(false);
       }
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [showPlanModal]);
+  }, [showPlanModal, showLimitModal]);
 
   // ── Handlers ──
 
@@ -573,6 +585,43 @@ export default function BillingPage() {
       </div>
     );
   }
+
+  // ── Spend Limit Handlers ──
+
+  const handleOpenLimitModal = () => {
+    setLimitInput(quota?.spendLimit != null ? String(quota.spendLimit) : "");
+    setShowLimitModal(true);
+  };
+
+  const handleSetLimit = async () => {
+    const amount = Number(limitInput);
+    if (isNaN(amount) || amount < 0) return;
+    setSavingLimit(true);
+    try {
+      await api.setMonthlyLimit(amount);
+      setShowLimitModal(false);
+      pushToast({ variant: "success", title: "Spend limit updated" });
+      fetchData();
+    } catch (err: unknown) {
+      pushToast({ variant: "error", title: "Failed to update limit", description: (err as Error).message });
+    } finally {
+      setSavingLimit(false);
+    }
+  };
+
+  const handleRemoveLimit = async () => {
+    setSavingLimit(true);
+    try {
+      await api.setMonthlyLimit(null);
+      setShowLimitModal(false);
+      pushToast({ variant: "success", title: "Spend limit removed", description: "Using plan default limit." });
+      fetchData();
+    } catch (err: unknown) {
+      pushToast({ variant: "error", title: "Failed to remove limit", description: (err as Error).message });
+    } finally {
+      setSavingLimit(false);
+    }
+  };
 
   const monthlyPct = quota?.monthly.pct;
 
@@ -902,10 +951,37 @@ export default function BillingPage() {
                 </div>
                 <p className="mt-2 text-lg font-semibold">
                   {quota ? formatCurrency(quota.balance) : "—"}
+                  <span className="ml-1.5 text-sm font-normal text-muted-foreground">remaining</span>
                 </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Used for overage beyond plan allowance
-                </p>
+                {quota?.credits && (quota.credits.added > 0 || quota.credits.spent > 0) ? (
+                  <>
+                    <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+                      <span>{formatCurrency(quota.credits.spent)} spent</span>
+                      <span>{formatCurrency(quota.credits.added)} added</span>
+                    </div>
+                    {quota.credits.added > 0 && (
+                      <div className="mt-1 h-1.5 w-full rounded-full bg-muted">
+                        <div
+                          className={`h-1.5 rounded-full transition-all ${
+                            quota.credits.spent / quota.credits.added >= 0.9
+                              ? "bg-red-500"
+                              : quota.credits.spent / quota.credits.added >= 0.7
+                                ? "bg-amber-500"
+                                : "bg-blue-500"
+                          }`}
+                          style={{ width: `${Math.min((quota.credits.spent / quota.credits.added) * 100, 100)}%` }}
+                        />
+                      </div>
+                    )}
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Resets {quota.monthly.resetsAt ? formatDate(quota.monthly.resetsAt) : "next month"}
+                    </p>
+                  </>
+                ) : (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    No credit usage this month
+                  </p>
+                )}
               </div>
             </div>
 
@@ -979,6 +1055,34 @@ export default function BillingPage() {
                 No payment method on file. Subscribe to a plan to add one.
               </p>
             )}
+          </div>
+
+          {/* Monthly Spend Limit */}
+          <div className="rounded-xl border border-border bg-card p-5">
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <Settings2 className="h-3.5 w-3.5 text-muted-foreground" />
+                  <h2 className="font-semibold">Monthly Spend Limit</h2>
+                </div>
+                <p className="mt-2 text-lg font-semibold">
+                  {quota?.spendLimit != null
+                    ? formatCurrency(quota.spendLimit)
+                    : "No limit"}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {quota?.spendLimit != null
+                    ? "Custom monthly spending cap is active."
+                    : `Using plan default${quota?.planLimit ? ` (${formatCurrency(quota.planLimit)}/month)` : ""}.`}
+                </p>
+              </div>
+              <button
+                onClick={handleOpenLimitModal}
+                className="cursor-pointer rounded-lg border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted"
+              >
+                Adjust limit
+              </button>
+            </div>
           </div>
 
           {/* Add Credits */}
@@ -1175,6 +1279,65 @@ export default function BillingPage() {
           </button>
         </div>
       </div>
+
+      {/* Spend Limit Modal */}
+      {showLimitModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowLimitModal(false)}>
+          <div className="w-full max-w-md rounded-xl border border-border bg-card p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Set monthly spend limit</h2>
+              <button onClick={() => setShowLimitModal(false)} className="cursor-pointer rounded-lg p-1 hover:bg-muted">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <p className="mt-2 text-sm text-muted-foreground">
+              You can set a maximum amount you can spend on extra usage per month.
+            </p>
+
+            <div className="mt-4">
+              <div className="flex items-center gap-2 rounded-lg border border-border px-3 py-2.5 focus-within:border-foreground/50">
+                <span className="text-sm text-muted-foreground">$</span>
+                <input
+                  type="number"
+                  value={limitInput}
+                  onChange={(e) => setLimitInput(e.target.value)}
+                  min={0}
+                  step={1}
+                  placeholder={quota?.planLimit ? String(quota.planLimit) : "0"}
+                  className="w-full bg-transparent text-sm outline-none"
+                  autoFocus
+                />
+              </div>
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                This spend limit goes into effect immediately.
+                {quota?.planLimit ? ` Plan default: ${formatCurrency(quota.planLimit)}/month.` : ""}
+              </p>
+              {limitInput === "0" && (
+                <p className="mt-1 text-xs text-amber-500">
+                  Setting to $0 will prevent all AI usage.
+                </p>
+              )}
+            </div>
+
+            <div className="mt-5 flex items-center gap-3">
+              <button
+                onClick={handleRemoveLimit}
+                disabled={savingLimit}
+                className="cursor-pointer rounded-lg border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted disabled:opacity-50"
+              >
+                Set to unlimited
+              </button>
+              <button
+                onClick={handleSetLimit}
+                disabled={savingLimit || limitInput === ""}
+                className="flex-1 cursor-pointer rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-50"
+              >
+                {savingLimit ? "Saving..." : "Set spend limit"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

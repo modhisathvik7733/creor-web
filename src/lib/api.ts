@@ -166,6 +166,9 @@ class ApiClient {
       blockReason: string | null;
       warnings: string[];
       overageActive: boolean;
+      credits?: { added: number; spent: number; balance: number } | null;
+      spendLimit: number | null;
+      planLimit: number | null;
     }>("/api/billing/quota");
   }
 
@@ -249,6 +252,13 @@ class ApiClient {
       workspaceId: string;
       tables: string[];
     }>("/api/billing/realtime-config");
+  }
+
+  async setMonthlyLimit(limitUsd: number | null) {
+    return this.patch<{ success: boolean; monthlyLimit: number | null }>(
+      "/api/billing/limit",
+      { monthlyLimit: limitUsd }
+    );
   }
 
   async getPayments(page = 1, limit = 20) {
