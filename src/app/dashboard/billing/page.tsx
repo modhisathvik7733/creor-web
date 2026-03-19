@@ -917,9 +917,9 @@ export default function BillingPage() {
                         <span className="ml-1 text-xs text-orange-500">(overage)</span>
                       )}
                     </div>
-                    <div className="mt-1.5 h-1.5 w-full rounded-full bg-muted">
+                    <div className="mt-1.5 h-2 w-full rounded-full bg-muted dark:bg-zinc-800">
                       <div
-                        className={`h-1.5 rounded-full transition-all ${
+                        className={`h-2 rounded-full transition-all ${
                           quota?.overageActive
                             ? "bg-orange-500"
                             : (monthlyPct ?? 0) >= 90
@@ -955,24 +955,27 @@ export default function BillingPage() {
                 </p>
                 {quota?.credits && (quota.credits.added > 0 || quota.credits.spent > 0) ? (
                   <>
-                    <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-                      <span>{formatCurrency(quota.credits.spent)} spent</span>
+                    {quota.credits.added > 0 && (() => {
+                      const remainingPct = Math.min((quota.credits.balance / quota.credits.added) * 100, 100);
+                      return (
+                        <div className="mt-2 h-2 w-full rounded-full bg-muted dark:bg-zinc-800">
+                          <div
+                            className={`h-2 rounded-full transition-all ${
+                              remainingPct < 10
+                                ? "bg-red-500"
+                                : remainingPct < 30
+                                  ? "bg-amber-500"
+                                  : "bg-blue-500"
+                            }`}
+                            style={{ width: `${remainingPct}%` }}
+                          />
+                        </div>
+                      );
+                    })()}
+                    <div className="mt-1.5 flex items-center justify-between text-xs text-muted-foreground">
                       <span>{formatCurrency(quota.credits.added)} added</span>
+                      <span>{formatCurrency(quota.credits.spent)} spent</span>
                     </div>
-                    {quota.credits.added > 0 && (
-                      <div className="mt-1 h-1.5 w-full rounded-full bg-muted">
-                        <div
-                          className={`h-1.5 rounded-full transition-all ${
-                            quota.credits.spent / quota.credits.added >= 0.9
-                              ? "bg-red-500"
-                              : quota.credits.spent / quota.credits.added >= 0.7
-                                ? "bg-amber-500"
-                                : "bg-blue-500"
-                          }`}
-                          style={{ width: `${Math.min((quota.credits.spent / quota.credits.added) * 100, 100)}%` }}
-                        />
-                      </div>
-                    )}
                     <p className="mt-1 text-xs text-muted-foreground">
                       Resets {quota.monthly.resetsAt ? formatDate(quota.monthly.resetsAt) : "next month"}
                     </p>
