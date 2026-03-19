@@ -185,7 +185,7 @@ interface Payment {
   upgrade?: { from: string; to: string };
 }
 
-const MIN_CREDIT = 1;
+const CREDIT_PRESETS = [5, 10, 20, 50, 100];
 
 // Fallback plan definitions — used until API responds
 const PLAN_DEFS_FALLBACK = [
@@ -238,7 +238,6 @@ export default function BillingPage() {
   const [planDefs, setPlanDefs] = useState(PLAN_DEFS_FALLBACK);
   const [loading, setLoading] = useState(true);
   const [addingCredits, setAddingCredits] = useState(false);
-  const [creditAmount, setCreditAmount] = useState(5);
   const [confirmAction, setConfirmAction] = useState<{
     type: "downgrade" | "cancel" | "reset";
     plan?: string;
@@ -255,6 +254,8 @@ export default function BillingPage() {
   const [showExtraUsagePopup, setShowExtraUsagePopup] = useState(false);
   const [extraUsageToggling, setExtraUsageToggling] = useState(false);
   const [pendingExtraUsage, setPendingExtraUsage] = useState(false);
+  const [showCreditsPopup, setShowCreditsPopup] = useState(false);
+  const [customCreditInput, setCustomCreditInput] = useState("");
   // billingPeriod removed — annual billing not yet wired to API
 
   const { toasts, push: pushToast, dismiss: dismissToast } = useToasts();
@@ -411,10 +412,11 @@ export default function BillingPage() {
 
   // ── Handlers ──
 
-  const handleAddCredits = async () => {
+  const handleAddCredits = async (amount: number) => {
     setAddingCredits(true);
+    setShowCreditsPopup(false);
     try {
-      const result = await api.addCredits(creditAmount);
+      const result = await api.addCredits(amount);
       window.open(result.checkoutUrl, "_blank");
     } catch {
       pushToast({
@@ -1123,8 +1125,8 @@ export default function BillingPage() {
                 <p className="text-xs text-muted-foreground">Current balance</p>
               </div>
               <button
-                onClick={handleAddCredits}
-                disabled={addingCredits || creditAmount < MIN_CREDIT}
+                onClick={() => setShowCreditsPopup(true)}
+                disabled={addingCredits}
                 className="cursor-pointer rounded-lg border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted"
               >
                 {addingCredits ? "Processing..." : "Buy extra usage"}
@@ -1315,6 +1317,65 @@ export default function BillingPage() {
               >
                 {extraUsageToggling ? "Saving..." : pendingExtraUsage ? "Enable" : "Disable"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Buy Credits Popup */}
+      {showCreditsPopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowCreditsPopup(false)}>
+          <div className="w-full max-w-sm rounded-xl border border-border bg-card p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Buy extra usage</h2>
+              <button onClick={() => setShowCreditsPopup(false)} className="cursor-pointer rounded-lg p-1 hover:bg-muted">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Credits are used for extra usage beyond your plan limit.
+            </p>
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              {CREDIT_PRESETS.map((amount) => (
+                <button
+                  key={amount}
+                  onClick={() => handleAddCredits(amount)}
+                  disabled={addingCredits}
+                  className="cursor-pointer rounded-lg border border-border px-3 py-2.5 text-sm font-medium transition-colors hover:bg-muted disabled:opacity-50"
+                >
+                  ${amount}
+                </button>
+              ))}
+              <button
+                onClick={() => {
+                  const val = parseFloat(customCreditInput);
+                  if (val >= 1) { handleAddCredits(val); }
+                }}
+                disabled={addingCredits || !customCreditInput || parseFloat(customCreditInput) < 1}
+                className="cursor-pointer rounded-lg bg-foreground px-3 py-2.5 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-50"
+              >
+                {addingCredits ? "..." : "Buy"}
+              </button>
+            </div>
+            <div className="mt-3">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">$</span>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  placeholder="Custom amount"
+                  value={customCreditInput}
+                  onChange={(e) => setCustomCreditInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      const val = parseFloat(customCreditInput);
+                      if (val >= 1) { handleAddCredits(val); }
+                    }
+                  }}
+                  className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm outline-none focus:border-foreground/40"
+                />
+              </div>
             </div>
           </div>
         </div>
