@@ -5,7 +5,6 @@ import { api } from "@/lib/api";
 import { useBillingRealtime } from "@/hooks/use-billing-realtime";
 import {
   CreditCard,
-  Plus,
   Zap,
   AlertCircle,
   CheckCircle2,
@@ -20,7 +19,6 @@ import {
   ChevronDown,
   ExternalLink,
   Check,
-  Settings2,
 } from "lucide-react";
 
 // ── Toast System ──
@@ -159,6 +157,7 @@ interface QuotaInfo {
   credits?: { added: number; spent: number; balance: number } | null;
   spendLimit: number | null;
   planLimit: number | null;
+  extraUsageEnabled: boolean;
 }
 
 interface Subscription {
@@ -186,7 +185,6 @@ interface Payment {
   upgrade?: { from: string; to: string };
 }
 
-const CREDIT_PRESETS = [5, 10, 25, 50];
 const MIN_CREDIT = 1;
 
 // Fallback plan definitions — used until API responds
@@ -254,6 +252,9 @@ export default function BillingPage() {
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [limitInput, setLimitInput] = useState("");
   const [savingLimit, setSavingLimit] = useState(false);
+  const [showExtraUsagePopup, setShowExtraUsagePopup] = useState(false);
+  const [extraUsageToggling, setExtraUsageToggling] = useState(false);
+  const [pendingExtraUsage, setPendingExtraUsage] = useState(false);
   // billingPeriod removed — annual billing not yet wired to API
 
   const { toasts, push: pushToast, dismiss: dismissToast } = useToasts();
@@ -623,6 +624,29 @@ export default function BillingPage() {
     }
   };
 
+  const handleExtraUsageToggle = () => {
+    const newValue = !(quota?.extraUsageEnabled ?? false);
+    setPendingExtraUsage(newValue);
+    setShowExtraUsagePopup(true);
+  };
+
+  const handleConfirmExtraUsage = async () => {
+    setExtraUsageToggling(true);
+    try {
+      await api.setExtraUsage(pendingExtraUsage);
+      setShowExtraUsagePopup(false);
+      pushToast({
+        variant: "success",
+        title: pendingExtraUsage ? "Extra usage enabled" : "Extra usage disabled",
+      });
+      fetchData();
+    } catch (err: unknown) {
+      pushToast({ variant: "error", title: "Failed to update extra usage", description: (err as Error).message });
+    } finally {
+      setExtraUsageToggling(false);
+    }
+  };
+
   const monthlyPct = quota?.monthly.pct;
 
   return (
@@ -896,96 +920,49 @@ export default function BillingPage() {
               </button>
             </div>
 
-            {/* Usage + Credits Row */}
-            <div className="mt-5 grid gap-5 sm:grid-cols-2">
-              {/* Usage */}
-              <div>
-                <div className="flex items-center gap-1.5">
-                  <Zap className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground">Monthly Usage</span>
-                </div>
-                {quota?.monthly.max !== null && quota?.monthly.max !== undefined ? (
-                  <>
-                    <div className="mt-2 flex items-baseline gap-1.5">
-                      <span className="text-lg font-semibold">
-                        {formatCurrency(quota!.monthly.current)}
-                      </span>
-                      <span className="text-sm text-muted-foreground">
-                        / {formatCurrency(quota!.monthly.max)}
-                      </span>
-                      {quota?.overageActive && (
-                        <span className="ml-1 text-xs text-orange-500">(overage)</span>
-                      )}
-                    </div>
-                    <div className="mt-1.5 h-2 w-full rounded-full bg-muted dark:bg-zinc-800">
-                      <div
-                        className={`h-2 rounded-full transition-all ${
-                          quota?.overageActive
-                            ? "bg-orange-500"
-                            : (monthlyPct ?? 0) >= 90
-                              ? "bg-red-500"
-                              : (monthlyPct ?? 0) >= 70
-                                ? "bg-amber-500"
-                                : "bg-green-500"
-                        }`}
-                        style={{ width: `${Math.min(monthlyPct ?? 0, 100)}%` }}
-                      />
-                    </div>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Resets {quota!.monthly.resetsAt ? formatDate(quota!.monthly.resetsAt) : "next month"}
-                    </p>
-                  </>
-                ) : (
-                  <p className="mt-2 text-lg font-semibold">
-                    {quota ? formatCurrency(quota.monthly.current) : "—"}
-                    <span className="ml-1.5 text-sm font-normal text-muted-foreground">No limit</span>
-                  </p>
-                )}
+            {/* Monthly Usage */}
+            <div className="mt-5">
+              <div className="flex items-center gap-1.5">
+                <Zap className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">Monthly Usage</span>
               </div>
-
-              {/* Credit Balance */}
-              <div>
-                <div className="flex items-center gap-1.5">
-                  <CreditCard className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground">Credit Balance</span>
-                </div>
-                <p className="mt-2 text-lg font-semibold">
-                  {quota ? formatCurrency(quota.balance) : "—"}
-                  <span className="ml-1.5 text-sm font-normal text-muted-foreground">remaining</span>
-                </p>
-                {quota?.credits && (quota.credits.added > 0 || quota.credits.spent > 0) ? (
-                  <>
-                    {quota.credits.added > 0 && (() => {
-                      const remainingPct = Math.min((quota.credits.balance / quota.credits.added) * 100, 100);
-                      return (
-                        <div className="mt-2 h-2 w-full rounded-full bg-muted dark:bg-zinc-800">
-                          <div
-                            className={`h-2 rounded-full transition-all ${
-                              remainingPct < 10
-                                ? "bg-red-500"
-                                : remainingPct < 30
-                                  ? "bg-amber-500"
-                                  : "bg-blue-500"
-                            }`}
-                            style={{ width: `${remainingPct}%` }}
-                          />
-                        </div>
-                      );
-                    })()}
-                    <div className="mt-1.5 flex items-center justify-between text-xs text-muted-foreground">
-                      <span>{formatCurrency(quota.credits.added)} added</span>
-                      <span>{formatCurrency(quota.credits.spent)} spent</span>
-                    </div>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Resets {quota.monthly.resetsAt ? formatDate(quota.monthly.resetsAt) : "next month"}
-                    </p>
-                  </>
-                ) : (
+              {quota?.monthly.max !== null && quota?.monthly.max !== undefined ? (
+                <>
+                  <div className="mt-2 flex items-baseline gap-1.5">
+                    <span className="text-lg font-semibold">
+                      {formatCurrency(quota!.monthly.current)}
+                    </span>
+                    <span className="text-sm text-muted-foreground">
+                      / {formatCurrency(quota!.monthly.max)}
+                    </span>
+                    {quota?.overageActive && (
+                      <span className="ml-1 text-xs text-orange-500">(overage)</span>
+                    )}
+                  </div>
+                  <div className="mt-1.5 h-2 w-full rounded-full bg-muted dark:bg-zinc-800">
+                    <div
+                      className={`h-2 rounded-full transition-all ${
+                        quota?.overageActive
+                          ? "bg-orange-500"
+                          : (monthlyPct ?? 0) >= 90
+                            ? "bg-red-500"
+                            : (monthlyPct ?? 0) >= 70
+                              ? "bg-amber-500"
+                              : "bg-green-500"
+                      }`}
+                      style={{ width: `${Math.min(monthlyPct ?? 0, 100)}%` }}
+                    />
+                  </div>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    No credit usage this month
+                    Resets {quota!.monthly.resetsAt ? formatDate(quota!.monthly.resetsAt) : "next month"}
                   </p>
-                )}
-              </div>
+                </>
+              ) : (
+                <p className="mt-2 text-lg font-semibold">
+                  {quota ? formatCurrency(quota.monthly.current) : "—"}
+                  <span className="ml-1.5 text-sm font-normal text-muted-foreground">No limit</span>
+                </p>
+              )}
             </div>
 
             {/* Renewal / Grace / Pending info */}
@@ -1060,23 +1037,75 @@ export default function BillingPage() {
             )}
           </div>
 
-          {/* Monthly Spend Limit */}
+          {/* Extra Usage */}
           <div className="rounded-xl border border-border bg-card p-5">
-            <div className="flex items-start justify-between">
-              <div>
-                <div className="flex items-center gap-1.5">
-                  <Settings2 className="h-3.5 w-3.5 text-muted-foreground" />
-                  <h2 className="font-semibold">Monthly Spend Limit</h2>
+            <h2 className="text-lg font-semibold">Extra Usage</h2>
+
+            {/* Toggle row */}
+            <div className="mt-3 flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">
+                Turn on extra usage to keep using AI if you hit your plan limit.
+              </p>
+              <button
+                onClick={handleExtraUsageToggle}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors ${
+                  quota?.extraUsageEnabled ? "bg-blue-500" : "bg-zinc-600"
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${
+                    quota?.extraUsageEnabled ? "translate-x-6" : "translate-x-1"
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* Spent + progress bar */}
+            {(() => {
+              const effectiveLimit = quota?.spendLimit ?? quota?.planLimit ?? null;
+              const spent = quota?.credits?.spent ?? 0;
+              const usedPct = effectiveLimit && effectiveLimit > 0
+                ? Math.min(Math.round((spent / effectiveLimit) * 100), 100)
+                : 0;
+              return (
+                <div className="mt-5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-lg font-semibold">{formatCurrency(spent)} spent</p>
+                      <p className="text-xs text-muted-foreground">
+                        Resets {quota?.monthly.resetsAt ? formatDate(quota.monthly.resetsAt) : "next month"}
+                      </p>
+                    </div>
+                    {effectiveLimit !== null && (
+                      <div className="flex items-center gap-3">
+                        <div className="h-2.5 w-40 rounded-full bg-muted dark:bg-zinc-800">
+                          <div
+                            className={`h-2.5 rounded-full transition-all ${
+                              usedPct >= 90
+                                ? "bg-red-500"
+                                : usedPct >= 70
+                                  ? "bg-amber-500"
+                                  : "bg-blue-500"
+                            }`}
+                            style={{ width: `${usedPct}%` }}
+                          />
+                        </div>
+                        <span className="text-sm text-muted-foreground">{usedPct}% used</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <p className="mt-2 text-lg font-semibold">
-                  {quota?.spendLimit != null
-                    ? formatCurrency(quota.spendLimit)
-                    : "No limit"}
+              );
+            })()}
+
+            {/* Monthly spend limit row */}
+            <div className="mt-5 flex items-center justify-between border-t border-border pt-5">
+              <div>
+                <p className="text-lg font-semibold">
+                  {quota?.spendLimit != null ? formatCurrency(quota.spendLimit) : quota?.planLimit ? formatCurrency(quota.planLimit) : "—"}
                 </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {quota?.spendLimit != null
-                    ? "Custom monthly spending cap is active."
-                    : `Using plan default${quota?.planLimit ? ` (${formatCurrency(quota.planLimit)}/month)` : ""}.`}
+                <p className="text-xs text-muted-foreground">
+                  Monthly spend limit{quota?.spendLimit == null && quota?.planLimit ? " (plan default)" : ""}
                 </p>
               </div>
               <button
@@ -1086,48 +1115,19 @@ export default function BillingPage() {
                 Adjust limit
               </button>
             </div>
-          </div>
 
-          {/* Add Credits */}
-          <div className="rounded-xl border border-border bg-card p-5">
-            <h2 className="font-semibold">Add Credits</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Top up credits for overage beyond your plan allowance
-            </p>
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-1 rounded-lg border border-border px-3 py-2">
-                <span className="text-sm text-muted-foreground">$</span>
-                <input
-                  type="number"
-                  value={creditAmount}
-                  onChange={(e) => setCreditAmount(Number(e.target.value))}
-                  min={MIN_CREDIT}
-                  step={1}
-                  className="w-24 bg-transparent text-sm outline-none"
-                />
-              </div>
-              <div className="flex gap-2">
-                {CREDIT_PRESETS.map((amount) => (
-                  <button
-                    key={amount}
-                    onClick={() => setCreditAmount(amount)}
-                    className={`cursor-pointer rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${
-                      creditAmount === amount
-                        ? "border-foreground bg-foreground text-background"
-                        : "border-border hover:bg-muted"
-                    }`}
-                  >
-                    ${amount}
-                  </button>
-                ))}
+            {/* Current balance row */}
+            <div className="mt-5 flex items-center justify-between border-t border-border pt-5">
+              <div>
+                <p className="text-lg font-semibold">{quota ? formatCurrency(quota.balance) : "—"}</p>
+                <p className="text-xs text-muted-foreground">Current balance</p>
               </div>
               <button
                 onClick={handleAddCredits}
                 disabled={addingCredits || creditAmount < MIN_CREDIT}
-                className="flex cursor-pointer items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+                className="cursor-pointer rounded-lg border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted"
               >
-                <Plus className="h-3.5 w-3.5" />
-                {addingCredits ? "Processing..." : "Add Credits"}
+                {addingCredits ? "Processing..." : "Buy extra usage"}
               </button>
             </div>
           </div>
@@ -1284,6 +1284,42 @@ export default function BillingPage() {
       </div>
 
       {/* Spend Limit Modal */}
+      {/* Extra Usage Toggle Confirmation */}
+      {showExtraUsagePopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowExtraUsagePopup(false)}>
+          <div className="w-full max-w-md rounded-xl border border-border bg-card p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">
+                {pendingExtraUsage ? "Enable extra usage?" : "Disable extra usage?"}
+              </h2>
+              <button onClick={() => setShowExtraUsagePopup(false)} className="cursor-pointer rounded-lg p-1 hover:bg-muted">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <p className="mt-3 text-sm text-muted-foreground">
+              {pendingExtraUsage
+                ? "When you hit your plan limit, extra usage lets you keep going by using your credit balance. Spending is capped at your monthly spend limit."
+                : "You'll be blocked when you reach your plan limit, even if you have credits remaining."}
+            </p>
+            <div className="mt-5 flex items-center gap-3">
+              <button
+                onClick={() => setShowExtraUsagePopup(false)}
+                className="cursor-pointer rounded-lg border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmExtraUsage}
+                disabled={extraUsageToggling}
+                className="flex-1 cursor-pointer rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-50"
+              >
+                {extraUsageToggling ? "Saving..." : pendingExtraUsage ? "Enable" : "Disable"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showLimitModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowLimitModal(false)}>
           <div className="w-full max-w-md rounded-xl border border-border bg-card p-6" onClick={(e) => e.stopPropagation()}>

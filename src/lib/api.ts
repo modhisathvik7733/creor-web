@@ -169,6 +169,7 @@ class ApiClient {
       credits?: { added: number; spent: number; balance: number } | null;
       spendLimit: number | null;
       planLimit: number | null;
+      extraUsageEnabled: boolean;
     }>("/api/billing/quota");
   }
 
@@ -258,6 +259,13 @@ class ApiClient {
     return this.patch<{ success: boolean; monthlyLimit: number | null }>(
       "/api/billing/limit",
       { monthlyLimit: limitUsd }
+    );
+  }
+
+  async setExtraUsage(enabled: boolean) {
+    return this.patch<{ success: boolean; extraUsageEnabled: boolean }>(
+      "/api/billing/extra-usage",
+      { enabled }
     );
   }
 
