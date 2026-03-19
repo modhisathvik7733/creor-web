@@ -649,7 +649,11 @@ export default function BillingPage() {
     }
   };
 
-  const monthlyPct = quota?.monthly.pct;
+  // Subscription usage: show against plan's included limit, NOT the custom spend limit
+  const subLimit = quota?.planLimit ?? quota?.monthly.max ?? null;
+  const subUsage = quota?.monthly.current ?? 0;
+  const subPct = subLimit && subLimit > 0 ? Math.min(Math.round((subUsage / subLimit) * 100), 100) : null;
+  const subOverPlan = subLimit !== null && subUsage > subLimit;
 
   return (
     <div className="p-8">
@@ -922,37 +926,37 @@ export default function BillingPage() {
               </button>
             </div>
 
-            {/* Monthly Usage */}
+            {/* Monthly Usage — based on plan's included limit, not spend limit */}
             <div className="mt-5">
               <div className="flex items-center gap-1.5">
                 <Zap className="h-3.5 w-3.5 text-muted-foreground" />
                 <span className="text-sm text-muted-foreground">Monthly Usage</span>
               </div>
-              {quota?.monthly.max !== null && quota?.monthly.max !== undefined ? (
+              {subLimit !== null ? (
                 <>
                   <div className="mt-2 flex items-baseline gap-1.5">
                     <span className="text-lg font-semibold">
-                      {formatCurrency(quota!.monthly.current)}
+                      {formatCurrency(Math.min(subUsage, subLimit))}
                     </span>
                     <span className="text-sm text-muted-foreground">
-                      / {formatCurrency(quota!.monthly.max)}
+                      / {formatCurrency(subLimit)}
                     </span>
-                    {quota?.overageActive && (
+                    {subOverPlan && (
                       <span className="ml-1 text-xs text-orange-500">(overage)</span>
                     )}
                   </div>
                   <div className="mt-1.5 h-2 w-full rounded-full bg-muted dark:bg-zinc-800">
                     <div
                       className={`h-2 rounded-full transition-all ${
-                        quota?.overageActive
+                        subOverPlan
                           ? "bg-orange-500"
-                          : (monthlyPct ?? 0) >= 90
+                          : (subPct ?? 0) >= 90
                             ? "bg-red-500"
-                            : (monthlyPct ?? 0) >= 70
+                            : (subPct ?? 0) >= 70
                               ? "bg-amber-500"
                               : "bg-green-500"
                       }`}
-                      style={{ width: `${Math.min(monthlyPct ?? 0, 100)}%` }}
+                      style={{ width: `${subPct ?? 0}%` }}
                     />
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
@@ -961,7 +965,7 @@ export default function BillingPage() {
                 </>
               ) : (
                 <p className="mt-2 text-lg font-semibold">
-                  {quota ? formatCurrency(quota.monthly.current) : "—"}
+                  {quota ? formatCurrency(subUsage) : "—"}
                   <span className="ml-1.5 text-sm font-normal text-muted-foreground">No limit</span>
                 </p>
               )}
