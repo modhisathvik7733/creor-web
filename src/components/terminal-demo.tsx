@@ -3,38 +3,16 @@
 import { useEffect, useState } from "react";
 
 const lines = [
-  { text: "$ creor agent build", delay: 0, type: "command" as const },
-  {
-    text: "Agent active — 19 providers, 25 tools",
-    delay: 600,
-    type: "info" as const,
-  },
-  {
-    text: "> Add JWT auth with refresh tokens",
-    delay: 1400,
-    type: "prompt" as const,
-  },
-  { text: "Writing auth module...", delay: 2200, type: "info" as const },
-  {
-    text: "\u2713 src/auth/jwt.service.ts",
-    delay: 2900,
-    type: "success" as const,
-  },
-  {
-    text: "\u2713 src/auth/auth.controller.ts",
-    delay: 3400,
-    type: "success" as const,
-  },
-  {
-    text: "\u2713 src/auth/auth.guard.ts",
-    delay: 3900,
-    type: "success" as const,
-  },
-  {
-    text: "\u2713 12 tests passing",
-    delay: 4400,
-    type: "success" as const,
-  },
+  { text: "$ creor", delay: 0, type: "command" as const },
+  { text: "\u26a1 Indexing codebase \u2014 1,247 files", delay: 600, type: "info" as const },
+  { text: "> Fix the auth timeout bug in the payments flow", delay: 1400, type: "prompt" as const },
+  { text: "\ud83d\udd00 Routing \u2192 build agent", delay: 2100, type: "info" as const },
+  { text: "\ud83d\udcd6 Loaded skill: payments-api", delay: 2700, type: "info" as const },
+  { text: "\ud83d\udd0d Searching codebase...", delay: 3200, type: "info" as const },
+  { text: "\u2713 Found: src/services/payment.ts:142", delay: 3800, type: "success" as const },
+  { text: "\u270e Editing src/services/payment.ts", delay: 4300, type: "success" as const },
+  { text: "\u270e Editing src/middleware/auth.ts", delay: 4700, type: "success" as const },
+  { text: "\u2713 2 files changed, 8 tests passing", delay: 5200, type: "success" as const },
 ];
 
 export function TerminalDemo() {
@@ -50,9 +28,9 @@ export function TerminalDemo() {
   return (
     <div className="overflow-hidden rounded-lg border border-border">
       <div className="flex items-center gap-1.5 border-b border-border bg-card px-4 py-2.5">
-        <span className="h-2 w-2 rounded-full bg-border" />
-        <span className="h-2 w-2 rounded-full bg-border" />
-        <span className="h-2 w-2 rounded-full bg-border" />
+        <span className="h-2 w-2 rounded-full bg-[#333]" />
+        <span className="h-2 w-2 rounded-full bg-[#333]" />
+        <span className="h-2 w-2 rounded-full bg-[#333]" />
         <span className="ml-3 font-mono text-[11px] text-muted-foreground">
           ~/project
         </span>
@@ -63,7 +41,7 @@ export function TerminalDemo() {
             key={i}
             className={`terminal-line ${
               line.type === "command"
-                ? "text-foreground"
+                ? "text-foreground font-semibold"
                 : line.type === "info"
                   ? "text-foreground-secondary"
                   : line.type === "prompt"
