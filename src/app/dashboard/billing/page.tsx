@@ -339,23 +339,32 @@ export default function BillingPage() {
 
     if (!quota.canSend && !shownWarningsRef.current.has("blocked")) {
       shownWarningsRef.current.add("blocked");
-      const blockTitle =
-        quota.blockReason === "free_limit_no_credits"
-          ? "Free tier limit reached"
-          : quota.blockReason === "limit_no_credits"
-            ? "Plan limit reached"
-            : "Sending blocked";
-      const blockDesc =
-        quota.blockReason === "free_limit_no_credits"
-          ? "Subscribe to a plan or add credits to continue."
-          : quota.blockReason === "limit_no_credits"
-            ? "Add credits or upgrade your plan to continue."
-            : `Usage resets ${quota.monthly.resetsAt ? formatDate(quota.monthly.resetsAt) : "next month"}.`;
-      pushToast({
-        variant: "error",
-        title: blockTitle,
-        description: blockDesc,
-      });
+      let blockTitle: string;
+      let blockDesc: string;
+
+      switch (quota.blockReason) {
+        case "free_limit_no_credits":
+          blockTitle = "Free tier limit reached";
+          blockDesc = "Subscribe to a plan or add credits to continue.";
+          break;
+        case "extra_usage_disabled":
+          blockTitle = "Plan limit reached";
+          blockDesc = "Enable Extra Usage to keep going with your credit balance.";
+          break;
+        case "no_credits":
+          blockTitle = "No credits remaining";
+          blockDesc = "Add credits to continue beyond your plan limit.";
+          break;
+        case "no_billing":
+          blockTitle = "Billing not set up";
+          blockDesc = "Set up billing to start using the service.";
+          break;
+        default:
+          blockTitle = "Usage limit reached";
+          blockDesc = `Resets ${quota.monthly.resetsAt ? formatDate(quota.monthly.resetsAt) : "next month"}.`;
+      }
+
+      pushToast({ variant: "error", title: blockTitle, description: blockDesc });
     }
   }, [quota, pushToast]);
 
