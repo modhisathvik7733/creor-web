@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
+import Image from "next/image";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { useMarketplaceRealtime } from "@/hooks/use-marketplace-realtime";
@@ -95,16 +96,12 @@ const ICON_MAP: Record<string, LucideIcon> = {
   ListTodo,
 };
 
-function getIcon(name: string | null): LucideIcon {
-  return name ? ICON_MAP[name] ?? Package : Package;
-}
-
 function ServerIcon({ slug, iconName, className }: { slug: string; iconName: string | null; className?: string }) {
   if (LOGO_SLUGS.has(slug)) {
-    return <img src={`/mcp-logos/${slug}.svg`} alt="" className={className} />;
+    return <Image src={`/mcp-logos/${slug}.svg`} alt="" width={16} height={16} className={className} />;
   }
-  const Icon = getIcon(iconName);
-  return <Icon className={className} />;
+  const FallbackIcon = iconName ? ICON_MAP[iconName] ?? Package : Package;
+  return <FallbackIcon className={className} />;
 }
 
 // ── Helpers ──
