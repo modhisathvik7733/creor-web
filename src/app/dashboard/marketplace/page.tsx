@@ -298,6 +298,8 @@ export default function MarketplacePage() {
   // Debounced search + instant category switch
   useEffect(() => {
     if (loading) return;
+    // Skip if default state (initial load already handles this)
+    if (category === "All" && !search.trim()) return;
 
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
 
@@ -314,7 +316,7 @@ export default function MarketplacePage() {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [category, search]);
+  }, [category, search, loading]);
 
   // ── Realtime sync ──
 
