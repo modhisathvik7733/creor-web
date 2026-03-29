@@ -225,7 +225,7 @@ export default function MarketplacePage() {
         search?: string;
         limit?: number;
         offset?: number;
-      } = { limit: 50, offset };
+      } = { limit: 25, offset };
       if (category !== "All") params.category = category.toLowerCase();
       if (search.trim()) params.search = search.trim();
 
@@ -278,7 +278,7 @@ export default function MarketplacePage() {
   // Initial load
   useEffect(() => {
     Promise.all([
-      api.getMarketplaceCatalog({ limit: 50, offset: 0 }),
+      api.getMarketplaceCatalog({ limit: 25, offset: 0 }),
       api.getMarketplaceInstallations(),
     ])
       .then(([c, i]) => {
