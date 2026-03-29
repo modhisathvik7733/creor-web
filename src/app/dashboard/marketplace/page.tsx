@@ -203,6 +203,7 @@ export default function MarketplacePage() {
   const [configuringSlug, setConfiguringSlug] = useState<string | null>(null);
   const [configValues, setConfigValues] = useState<Record<string, string>>({});
   const [installing, setInstalling] = useState<string | null>(null);
+  const [oauthInfoSlug, setOauthInfoSlug] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [optimisticInstalled, setOptimisticInstalled] = useState<Set<string>>(
     new Set()
@@ -300,7 +301,11 @@ export default function MarketplacePage() {
 
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
 
-    const delay = search.trim() ? 300 : 0;
+    // Clear stale results immediately so old cards never appear during search
+    setCatalog([]);
+    setSearching(true);
+
+    const delay = search.trim() ? 200 : 0;
     searchTimerRef.current = setTimeout(() => {
       fetchCatalog();
     }, delay);
@@ -322,13 +327,7 @@ export default function MarketplacePage() {
 
   // ── Handlers ──
 
-  const handleInstall = async (item: CatalogItem) => {
-    if (item.configParams.length > 0) {
-      setConfiguringSlug(item.slug);
-      setConfigValues({});
-      return;
-    }
-
+  const doInstall = async (item: CatalogItem, configVals?: Record<string, string>) => {
     setInstalling(item.slug);
     try {
       const registryData =
@@ -348,24 +347,51 @@ export default function MarketplacePage() {
 
       await api.installMarketplaceItem(
         item.slug,
-        undefined,
+        configVals,
         undefined,
         registryData
       );
 
-      // Optimistically mark as installed immediately
       setOptimisticInstalled((prev) => new Set(prev).add(item.slug));
-      toast.success(
-        `${item.name} installed! Your IDE will sync automatically.`
-      );
 
-      // Refresh data in background
+      // Context-aware post-install toast
+      if (item.serverType === "remote" && item.configParams.length === 0) {
+        toast.success(
+          `${item.name} installed! Open the MCP panel in your IDE and click "Authenticate" to connect.`
+        );
+      } else if (item.serverType === "remote") {
+        toast.success(
+          `${item.name} installed! Your credentials have been saved and will sync to your IDE.`
+        );
+      } else {
+        toast.success(
+          `${item.name} installed! The server will start automatically in your IDE.`
+        );
+      }
+
       await Promise.all([fetchCatalog(), fetchInstallations()]);
     } catch {
       toast.error(`Failed to install ${item.name}`);
     } finally {
       setInstalling(null);
     }
+  };
+
+  const handleInstall = async (item: CatalogItem) => {
+    if (item.configParams.length > 0) {
+      setConfiguringSlug(item.slug);
+      setConfigValues({});
+      return;
+    }
+
+    // Remote servers with no config params use OAuth — show info dialog
+    if (item.serverType === "remote") {
+      setOauthInfoSlug(item.slug);
+      return;
+    }
+
+    // Local servers with no params — install directly
+    await doInstall(item);
   };
 
   const handleConfiguredInstall = async (item: CatalogItem) => {
@@ -377,43 +403,14 @@ export default function MarketplacePage() {
       return;
     }
 
-    setInstalling(item.slug);
-    try {
-      const registryData =
-        item.source === "registry"
-          ? {
-              name: item.name,
-              description: item.description,
-              category: item.category,
-              serverType: item.serverType,
-              configTemplate: item.configTemplate ?? {},
-              configParams: item.configParams,
-              logoUrl: item.logoUrl,
-              author: item.author,
-              githubUrl: item.githubUrl,
-            }
-          : undefined;
+    // Filter out empty optional values
+    const vals = Object.fromEntries(
+      Object.entries(configValues).filter(([, v]) => v.trim())
+    );
 
-      await api.installMarketplaceItem(
-        item.slug,
-        configValues,
-        undefined,
-        registryData
-      );
-
-      setOptimisticInstalled((prev) => new Set(prev).add(item.slug));
-      toast.success(
-        `${item.name} installed! Your IDE will sync automatically.`
-      );
-      setConfiguringSlug(null);
-      setConfigValues({});
-
-      await Promise.all([fetchCatalog(), fetchInstallations()]);
-    } catch {
-      toast.error(`Failed to install ${item.name}`);
-    } finally {
-      setInstalling(null);
-    }
+    await doInstall(item, Object.keys(vals).length > 0 ? vals : undefined);
+    setConfiguringSlug(null);
+    setConfigValues({});
   };
 
   const handleToggle = async (inst: Installation) => {
@@ -591,7 +588,13 @@ export default function MarketplacePage() {
           </div>
 
           {/* Catalog grid */}
-          {catalog.length === 0 && !searching ? (
+          {searching && catalog.length === 0 ? (
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <SkeletonCard key={i} />
+              ))}
+            </div>
+          ) : catalog.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-center">
               <Store className="mb-3 h-6 w-6 text-muted-foreground" />
               <p className="text-[13px] text-muted-foreground">
@@ -600,21 +603,18 @@ export default function MarketplacePage() {
             </div>
           ) : (
             <>
-              <div
-                className={`grid grid-cols-1 gap-3 md:grid-cols-2 ${
-                  searching ? "opacity-60 transition-opacity" : ""
-                }`}
-              >
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 {catalog.map((item) => {
                   const installed = isInstalled(item.slug);
                   const isConfiguring = configuringSlug === item.slug;
+                  const isOauthInfo = oauthInfoSlug === item.slug;
                   const isInstallingThis = installing === item.slug;
 
                   return (
                     <div
                       key={item.id}
                       className={`group rounded-lg border border-border p-4 transition-colors hover:bg-muted/30 ${
-                        isConfiguring ? "col-span-full" : ""
+                        isConfiguring || isOauthInfo ? "col-span-full" : ""
                       }`}
                     >
                       {/* Card header */}
@@ -697,13 +697,13 @@ export default function MarketplacePage() {
                             {formatCount(item.githubStars!)}
                           </span>
                         )}
-                        {item.githubUrl && (
+                        {(item.githubUrl || item.sourceUrl) && (
                           <a
-                            href={item.githubUrl}
+                            href={(item.githubUrl || item.sourceUrl)!}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="transition-colors hover:text-foreground"
-                            title="View source"
+                            title={item.githubUrl ? "View source" : "Visit website"}
                           >
                             <ExternalLink className="h-2.5 w-2.5" />
                           </a>
@@ -715,6 +715,43 @@ export default function MarketplacePage() {
                           </span>
                         )}
                       </div>
+
+                      {/* OAuth info dialog (inline) */}
+                      {isOauthInfo && !installed && (
+                        <div className="mt-4 border-t border-border pt-4">
+                          <div className="flex items-start gap-2.5 rounded-md bg-blue-500/5 border border-blue-500/10 p-3">
+                            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-400" />
+                            <div>
+                              <p className="text-[12px] font-medium text-foreground">
+                                Authentication required
+                              </p>
+                              <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                                This server uses OAuth to connect to your account.
+                                After installation, open the MCP panel in your IDE
+                                and click &quot;Authenticate&quot; to complete setup.
+                              </p>
+                            </div>
+                          </div>
+                          <div className="mt-3 flex items-center gap-2">
+                            <button
+                              onClick={async () => {
+                                setOauthInfoSlug(null);
+                                await doInstall(item);
+                              }}
+                              disabled={isInstallingThis}
+                              className="rounded-md bg-foreground px-3 py-1.5 text-[12px] font-medium text-background transition-opacity hover:opacity-80 disabled:opacity-50"
+                            >
+                              {isInstallingThis ? "Installing..." : "Install"}
+                            </button>
+                            <button
+                              onClick={() => setOauthInfoSlug(null)}
+                              className="rounded-md px-3 py-1.5 text-[12px] text-muted-foreground transition-colors hover:text-foreground"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
 
                       {/* Config form (inline) */}
                       {isConfiguring && !installed && (
