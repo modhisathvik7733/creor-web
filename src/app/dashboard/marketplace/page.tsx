@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import Image from "next/image";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
@@ -14,7 +14,6 @@ import {
   Loader2,
   ShieldCheck,
   Star,
-  Package,
   Info,
   Plug,
   ArrowUpRight,
@@ -68,23 +67,100 @@ interface Installation {
   };
 }
 
+// ── Constants ──
+
+const CATEGORIES = [
+  "All",
+  "AI",
+  "Communication",
+  "Database",
+  "Developer",
+  "Productivity",
+] as const;
+
+const AVATAR_COLORS = [
+  "bg-blue-500/15 text-blue-400",
+  "bg-purple-500/15 text-purple-400",
+  "bg-emerald-500/15 text-emerald-400",
+  "bg-amber-500/15 text-amber-400",
+  "bg-rose-500/15 text-rose-400",
+  "bg-cyan-500/15 text-cyan-400",
+  "bg-indigo-500/15 text-indigo-400",
+  "bg-orange-500/15 text-orange-400",
+];
+
+function hashCode(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash);
+}
+
 // ── Server Icon ──
 
-function ServerIcon({ logoUrl, className }: { logoUrl: string | null | undefined; className?: string }) {
+function ServerIcon({
+  logoUrl,
+  name,
+  slug,
+}: {
+  logoUrl: string | null | undefined;
+  name?: string;
+  slug?: string;
+}) {
   const [failed, setFailed] = useState(false);
+
   if (logoUrl && !failed) {
     return (
       <Image
         src={logoUrl}
         alt=""
-        width={20}
-        height={20}
-        className={`rounded-sm object-contain ${className ?? ""}`}
+        width={32}
+        height={32}
+        className="rounded-md object-contain"
         onError={() => setFailed(true)}
       />
     );
   }
-  return <Package className={className} />;
+
+  const label = name ?? slug ?? "?";
+  const initial = label.charAt(0).toUpperCase();
+  const colorIdx = hashCode(slug ?? label) % AVATAR_COLORS.length;
+
+  return (
+    <div
+      className={`flex h-8 w-8 items-center justify-center rounded-md text-sm font-semibold ${AVATAR_COLORS[colorIdx]}`}
+    >
+      {initial}
+    </div>
+  );
+}
+
+// ── Skeleton ──
+
+function SkeletonCard() {
+  return (
+    <div className="animate-pulse rounded-lg border border-border p-4">
+      <div className="mb-2.5 flex items-start justify-between">
+        <div className="flex items-center gap-2.5">
+          <div className="h-8 w-8 rounded-md bg-muted" />
+          <div>
+            <div className="h-3.5 w-28 rounded bg-muted" />
+            <div className="mt-1.5 h-2.5 w-16 rounded bg-muted" />
+          </div>
+        </div>
+        <div className="h-6 w-16 rounded-md bg-muted" />
+      </div>
+      <div className="mb-3 space-y-1.5">
+        <div className="h-2.5 w-full rounded bg-muted" />
+        <div className="h-2.5 w-3/4 rounded bg-muted" />
+      </div>
+      <div className="flex gap-2">
+        <div className="h-4 w-12 rounded bg-muted" />
+        <div className="h-4 w-10 rounded bg-muted" />
+      </div>
+    </div>
+  );
 }
 
 // ── Helpers ──
@@ -119,6 +195,7 @@ export default function MarketplacePage() {
   const [totalServers, setTotalServers] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [searching, setSearching] = useState(false);
   const [installations, setInstallations] = useState<Installation[]>([]);
   const [loading, setLoading] = useState(true);
   const [category, setCategory] = useState("All");
@@ -127,56 +204,78 @@ export default function MarketplacePage() {
   const [configValues, setConfigValues] = useState<Record<string, string>>({});
   const [installing, setInstalling] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [optimisticInstalled, setOptimisticInstalled] = useState<Set<string>>(
+    new Set()
+  );
   const toggleAbortRef = useRef<Map<string, AbortController>>(new Map());
-
-  // Dynamic categories from catalog data
-  const categories = useMemo(() => {
-    const cats = new Set(catalog.map((s) => s.category));
-    const sorted = Array.from(cats).sort();
-    return ["All", ...sorted.map((c) => c.charAt(0).toUpperCase() + c.slice(1))];
-  }, [catalog]);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fetchControllerRef = useRef<AbortController | null>(null);
 
   // ── Data fetching ──
 
-  const fetchCatalog = useCallback((append = false, offset = 0) => {
-    const params: { category?: string; search?: string; limit?: number; offset?: number } = {
-      limit: 50,
-      offset,
-    };
-    if (category !== "All") params.category = category.toLowerCase();
-    if (search.trim()) params.search = search.trim();
+  const fetchCatalog = useCallback(
+    (append = false, offset = 0): Promise<void> => {
+      // Abort previous in-flight request
+      fetchControllerRef.current?.abort();
+      const controller = new AbortController();
+      fetchControllerRef.current = controller;
 
-    if (!append) setLoadingMore(false);
-    else setLoadingMore(true);
+      const params: {
+        category?: string;
+        search?: string;
+        limit?: number;
+        offset?: number;
+      } = { limit: 50, offset };
+      if (category !== "All") params.category = category.toLowerCase();
+      if (search.trim()) params.search = search.trim();
 
-    api
-      .getMarketplaceCatalog(params)
-      .then((res) => {
-        if (append) {
-          setCatalog((prev) => [...prev, ...res.servers]);
-        } else {
-          setCatalog(res.servers);
-        }
-        setTotalServers(res.total);
-        setHasMore(res.hasMore);
-      })
-      .catch((err) => {
-        console.error("Failed to fetch catalog:", err);
-        toast.error("Failed to load MCP catalog");
-      })
-      .finally(() => setLoadingMore(false));
-  }, [category, search]);
+      if (append) {
+        setLoadingMore(true);
+      } else {
+        setSearching(true);
+      }
 
-  const fetchInstallations = () => {
-    api
+      return api
+        .getMarketplaceCatalog(params)
+        .then((res) => {
+          if (controller.signal.aborted) return;
+          if (append) {
+            setCatalog((prev) => [...prev, ...res.servers]);
+          } else {
+            setCatalog(res.servers);
+          }
+          setTotalServers(res.total);
+          setHasMore(res.hasMore);
+        })
+        .catch((err) => {
+          if (controller.signal.aborted) return;
+          console.error("Failed to fetch catalog:", err);
+          toast.error("Failed to load MCP catalog");
+        })
+        .finally(() => {
+          if (controller.signal.aborted) return;
+          setSearching(false);
+          setLoadingMore(false);
+        });
+    },
+    [category, search]
+  );
+
+  const fetchInstallations = useCallback((): Promise<void> => {
+    return api
       .getMarketplaceInstallations()
-      .then(setInstallations)
+      .then((data) => {
+        setInstallations(data);
+        // Clear optimistic flags that are now in real data
+        setOptimisticInstalled(new Set());
+      })
       .catch((err) => {
         console.error("Failed to fetch installations:", err);
         toast.error("Failed to load installations");
       });
-  };
+  }, []);
 
+  // Initial load
   useEffect(() => {
     Promise.all([
       api.getMarketplaceCatalog({ limit: 50, offset: 0 }),
@@ -195,8 +294,20 @@ export default function MarketplacePage() {
       .finally(() => setLoading(false));
   }, []);
 
+  // Debounced search + instant category switch
   useEffect(() => {
-    if (!loading) fetchCatalog();
+    if (loading) return;
+
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+
+    const delay = search.trim() ? 300 : 0;
+    searchTimerRef.current = setTimeout(() => {
+      fetchCatalog();
+    }, delay);
+
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [category, search]);
 
@@ -205,7 +316,7 @@ export default function MarketplacePage() {
   const handleRealtimeUpdate = useCallback(() => {
     fetchCatalog();
     fetchInstallations();
-  }, [fetchCatalog]);
+  }, [fetchCatalog, fetchInstallations]);
 
   useMarketplaceRealtime(handleRealtimeUpdate);
 
@@ -220,23 +331,36 @@ export default function MarketplacePage() {
 
     setInstalling(item.slug);
     try {
-      // For registry servers, pass registryData so backend can auto-create catalog entry
-      const registryData = item.source === "registry" ? {
-        name: item.name,
-        description: item.description,
-        category: item.category,
-        serverType: item.serverType,
-        configTemplate: item.configTemplate ?? {},
-        configParams: item.configParams,
-        logoUrl: item.logoUrl,
-        author: item.author,
-        githubUrl: item.githubUrl,
-      } : undefined;
+      const registryData =
+        item.source === "registry"
+          ? {
+              name: item.name,
+              description: item.description,
+              category: item.category,
+              serverType: item.serverType,
+              configTemplate: item.configTemplate ?? {},
+              configParams: item.configParams,
+              logoUrl: item.logoUrl,
+              author: item.author,
+              githubUrl: item.githubUrl,
+            }
+          : undefined;
 
-      await api.installMarketplaceItem(item.slug, undefined, undefined, registryData);
-      toast.success(`${item.name} installed! Your IDE will sync automatically.`);
-      fetchCatalog();
-      fetchInstallations();
+      await api.installMarketplaceItem(
+        item.slug,
+        undefined,
+        undefined,
+        registryData
+      );
+
+      // Optimistically mark as installed immediately
+      setOptimisticInstalled((prev) => new Set(prev).add(item.slug));
+      toast.success(
+        `${item.name} installed! Your IDE will sync automatically.`
+      );
+
+      // Refresh data in background
+      await Promise.all([fetchCatalog(), fetchInstallations()]);
     } catch {
       toast.error(`Failed to install ${item.name}`);
     } finally {
@@ -255,24 +379,36 @@ export default function MarketplacePage() {
 
     setInstalling(item.slug);
     try {
-      const registryData = item.source === "registry" ? {
-        name: item.name,
-        description: item.description,
-        category: item.category,
-        serverType: item.serverType,
-        configTemplate: item.configTemplate ?? {},
-        configParams: item.configParams,
-        logoUrl: item.logoUrl,
-        author: item.author,
-        githubUrl: item.githubUrl,
-      } : undefined;
+      const registryData =
+        item.source === "registry"
+          ? {
+              name: item.name,
+              description: item.description,
+              category: item.category,
+              serverType: item.serverType,
+              configTemplate: item.configTemplate ?? {},
+              configParams: item.configParams,
+              logoUrl: item.logoUrl,
+              author: item.author,
+              githubUrl: item.githubUrl,
+            }
+          : undefined;
 
-      await api.installMarketplaceItem(item.slug, configValues, undefined, registryData);
-      toast.success(`${item.name} installed! Your IDE will sync automatically.`);
+      await api.installMarketplaceItem(
+        item.slug,
+        configValues,
+        undefined,
+        registryData
+      );
+
+      setOptimisticInstalled((prev) => new Set(prev).add(item.slug));
+      toast.success(
+        `${item.name} installed! Your IDE will sync automatically.`
+      );
       setConfiguringSlug(null);
       setConfigValues({});
-      fetchCatalog();
-      fetchInstallations();
+
+      await Promise.all([fetchCatalog(), fetchInstallations()]);
     } catch {
       toast.error(`Failed to install ${item.name}`);
     } finally {
@@ -294,12 +430,16 @@ export default function MarketplacePage() {
     );
 
     try {
-      await api.updateMarketplaceInstallation(inst.id, { enabled: newEnabled });
+      await api.updateMarketplaceInstallation(inst.id, {
+        enabled: newEnabled,
+      });
       if (controller.signal.aborted) return;
     } catch {
       if (controller.signal.aborted) return;
       setInstallations((p) =>
-        p.map((i) => (i.id === inst.id ? { ...i, enabled: !newEnabled } : i))
+        p.map((i) =>
+          i.id === inst.id ? { ...i, enabled: !newEnabled } : i
+        )
       );
       toast.error("Failed to update");
     } finally {
@@ -316,6 +456,11 @@ export default function MarketplacePage() {
     try {
       await api.uninstallMarketplaceItem(inst.id);
       setInstallations((prev) => prev.filter((i) => i.id !== inst.id));
+      setOptimisticInstalled((prev) => {
+        const next = new Set(prev);
+        next.delete(inst.catalog.slug);
+        return next;
+      });
       toast.success(`${inst.catalog.name} uninstalled`);
     } catch {
       toast.error("Failed to uninstall");
@@ -323,14 +468,23 @@ export default function MarketplacePage() {
   };
 
   const isInstalled = (slug: string) =>
+    optimisticInstalled.has(slug) ||
     installations.some((i) => i.catalog.slug === slug);
 
   // ── Loading state ──
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <div className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-foreground" />
+      <div className="p-8">
+        <div className="mb-8">
+          <div className="h-6 w-32 rounded bg-muted" />
+          <div className="mt-2 h-3.5 w-64 rounded bg-muted" />
+        </div>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <SkeletonCard key={i} />
+          ))}
+        </div>
       </div>
     );
   }
@@ -399,7 +553,7 @@ export default function MarketplacePage() {
         </button>
       </div>
 
-      {/* ── Browse Tab ── */}
+      {/* Browse Tab */}
       {tab === "browse" && (
         <>
           {/* Search */}
@@ -413,12 +567,15 @@ export default function MarketplacePage() {
                 placeholder="Search servers..."
                 className="w-full rounded-md border border-border bg-transparent py-2 pl-9 pr-3 text-[13px] outline-none transition-colors focus:border-foreground/40"
               />
+              {searching && (
+                <Loader2 className="absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-muted-foreground" />
+              )}
             </div>
           </div>
 
-          {/* Dynamic categories */}
+          {/* Fixed categories */}
           <div className="mb-6 flex flex-wrap gap-1">
-            {categories.map((cat) => (
+            {CATEGORIES.map((cat) => (
               <button
                 key={cat}
                 onClick={() => setCategory(cat)}
@@ -434,7 +591,7 @@ export default function MarketplacePage() {
           </div>
 
           {/* Catalog grid */}
-          {catalog.length === 0 ? (
+          {catalog.length === 0 && !searching ? (
             <div className="flex flex-col items-center justify-center py-20 text-center">
               <Store className="mb-3 h-6 w-6 text-muted-foreground" />
               <p className="text-[13px] text-muted-foreground">
@@ -443,7 +600,11 @@ export default function MarketplacePage() {
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div
+                className={`grid grid-cols-1 gap-3 md:grid-cols-2 ${
+                  searching ? "opacity-60 transition-opacity" : ""
+                }`}
+              >
                 {catalog.map((item) => {
                   const installed = isInstalled(item.slug);
                   const isConfiguring = configuringSlug === item.slug;
@@ -459,9 +620,11 @@ export default function MarketplacePage() {
                       {/* Card header */}
                       <div className="mb-2.5 flex items-start justify-between">
                         <div className="flex items-center gap-2.5">
-                          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-muted">
-                            <ServerIcon logoUrl={item.logoUrl} className="h-4 w-4 text-foreground" />
-                          </div>
+                          <ServerIcon
+                            logoUrl={item.logoUrl}
+                            name={item.name}
+                            slug={item.slug}
+                          />
                           <div>
                             <div className="flex items-center gap-1.5">
                               <h3 className="text-[13px] font-semibold">
@@ -519,6 +682,9 @@ export default function MarketplacePage() {
                           }`}
                         >
                           {item.serverType === "remote" ? "Cloud" : "Local"}
+                        </span>
+                        <span className="capitalize rounded px-1.5 py-0.5 bg-muted">
+                          {item.category}
                         </span>
                         {item.version && (
                           <span className="text-muted-foreground">
@@ -642,7 +808,7 @@ export default function MarketplacePage() {
         </>
       )}
 
-      {/* ── Installed Tab ── */}
+      {/* Installed Tab */}
       {tab === "installed" && (
         <div>
           <div className="mb-5 flex items-center gap-2 text-[12px] text-muted-foreground">
@@ -674,9 +840,11 @@ export default function MarketplacePage() {
                     className="flex items-center justify-between px-4 py-3 transition-colors hover:bg-muted/30"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-md bg-muted">
-                        <ServerIcon logoUrl={inst.catalog.logoUrl} className="h-4 w-4 text-foreground" />
-                      </div>
+                      <ServerIcon
+                        logoUrl={inst.catalog.logoUrl}
+                        name={inst.catalog.name}
+                        slug={inst.catalog.slug}
+                      />
                       <div>
                         <p className="text-[13px] font-medium">
                           {inst.catalog.name}
