@@ -503,26 +503,35 @@ class ApiClient {
 
   // ── Marketplace ──
 
-  async getMarketplaceCatalog(params?: { category?: string; search?: string; featured?: boolean }) {
+  async getMarketplaceCatalog(params?: { category?: string; search?: string; featured?: boolean; limit?: number; offset?: number }) {
     const qs = new URLSearchParams();
     if (params?.category) qs.set("category", params.category);
     if (params?.search) qs.set("search", params.search);
     if (params?.featured) qs.set("featured", "true");
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.offset) qs.set("offset", String(params.offset));
     const query = qs.toString();
-    return this.get<
-      Array<{
+    return this.get<{
+      servers: Array<{
         id: string;
         slug: string;
         name: string;
         description: string;
         category: string;
         icon: string | null;
+        logoUrl: string | null;
         author: string | null;
+        sourceUrl?: string | null;
+        githubUrl?: string | null;
+        githubStars?: number;
         serverType: string;
         tags: string[];
         featured: boolean;
         verified: boolean;
         installCount: number;
+        version?: string | null;
+        source?: "featured" | "registry";
+        configTemplate?: Record<string, unknown>;
         configParams: Array<{
           key: string;
           label: string;
@@ -530,8 +539,10 @@ class ApiClient {
           required: boolean;
           secret: boolean;
         }>;
-      }>
-    >(`/api/marketplace/catalog${query ? `?${query}` : ""}`);
+      }>;
+      total: number;
+      hasMore: boolean;
+    }>(`/api/marketplace/catalog${query ? `?${query}` : ""}`);
   }
 
   async getMarketplaceInstallations() {
@@ -545,6 +556,7 @@ class ApiClient {
           name: string;
           slug: string;
           icon: string | null;
+          logoUrl?: string | null;
           category: string;
           author: string | null;
         };
@@ -555,11 +567,22 @@ class ApiClient {
   async installMarketplaceItem(
     catalogSlug: string,
     configValues?: Record<string, string>,
-    mcpName?: string
+    mcpName?: string,
+    registryData?: {
+      name: string;
+      description: string;
+      category: string;
+      serverType: string;
+      configTemplate: Record<string, unknown>;
+      configParams?: Array<{ key: string; label: string; placeholder: string; required: boolean; secret: boolean }>;
+      logoUrl?: string | null;
+      author?: string | null;
+      githubUrl?: string | null;
+    }
   ) {
     return this.post<{ id: string; mcpName: string }>(
       "/api/marketplace/installations",
-      { catalogSlug, configValues, mcpName }
+      { catalogSlug, configValues, mcpName, registryData }
     );
   }
 

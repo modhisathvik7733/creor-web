@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import Image from "next/image";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
@@ -13,25 +13,13 @@ import {
   Check,
   Loader2,
   ShieldCheck,
-  Github,
-  MessageSquare,
-  FileText,
-  Database,
-  CheckSquare,
-  FolderOpen,
-  HardDrive,
-  Bug,
-  Globe,
-  Brain,
-  Sparkles,
-  ListTodo,
+  Star,
   Package,
   Info,
   Plug,
   ArrowUpRight,
   ExternalLink,
 } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 
 // ── Types ──
 
@@ -42,12 +30,19 @@ interface CatalogItem {
   description: string;
   category: string;
   icon: string | null;
+  logoUrl: string | null;
   author: string | null;
+  sourceUrl?: string | null;
+  githubUrl?: string | null;
+  githubStars?: number;
   serverType: string;
   tags: string[];
   featured: boolean;
   verified: boolean;
   installCount: number;
+  version?: string | null;
+  source?: "featured" | "registry";
+  configTemplate?: Record<string, unknown>;
   configParams: Array<{
     key: string;
     label: string;
@@ -67,53 +62,32 @@ interface Installation {
     name: string;
     slug: string;
     icon: string | null;
+    logoUrl?: string | null;
     category: string;
     author: string | null;
   };
 }
 
-// ── Icon mapping ──
+// ── Server Icon ──
 
-const LOGO_SLUGS = new Set([
-  "github", "slack", "notion", "supabase", "memory", "linear",
-  "postgres", "filesystem", "brave-search", "google-drive",
-  "sentry", "puppeteer", "sqlite", "exa", "todoist",
-]);
-
-const ICON_MAP: Record<string, LucideIcon> = {
-  Github,
-  MessageSquare,
-  FileText,
-  Database,
-  CheckSquare,
-  FolderOpen,
-  Search,
-  HardDrive,
-  Bug,
-  Globe,
-  Brain,
-  Sparkles,
-  ListTodo,
-};
-
-function ServerIcon({ slug, iconName, className }: { slug: string; iconName: string | null; className?: string }) {
-  if (LOGO_SLUGS.has(slug)) {
-    return <Image src={`/mcp-logos/${slug}.svg`} alt="" width={16} height={16} className={className} />;
+function ServerIcon({ logoUrl, className }: { logoUrl: string | null | undefined; className?: string }) {
+  const [failed, setFailed] = useState(false);
+  if (logoUrl && !failed) {
+    return (
+      <Image
+        src={logoUrl}
+        alt=""
+        width={20}
+        height={20}
+        className={`rounded-sm object-contain ${className ?? ""}`}
+        onError={() => setFailed(true)}
+      />
+    );
   }
-  const FallbackIcon = iconName ? ICON_MAP[iconName] ?? Package : Package;
-  return <FallbackIcon className={className} />;
+  return <Package className={className} />;
 }
 
 // ── Helpers ──
-
-const CATEGORIES = [
-  "All",
-  "Developer",
-  "Productivity",
-  "Communication",
-  "Database",
-  "AI",
-];
 
 function timeAgo(dateStr: string): string {
   const now = Date.now();
@@ -131,7 +105,8 @@ function timeAgo(dateStr: string): string {
   return `${months}mo ago`;
 }
 
-function formatInstallCount(count: number): string {
+function formatCount(count: number): string {
+  if (count >= 1000000) return `${(count / 1000000).toFixed(1)}M`;
   if (count >= 1000) return `${(count / 1000).toFixed(1)}k`;
   return String(count);
 }
@@ -141,6 +116,9 @@ function formatInstallCount(count: number): string {
 export default function MarketplacePage() {
   const [tab, setTab] = useState<"browse" | "installed">("browse");
   const [catalog, setCatalog] = useState<CatalogItem[]>([]);
+  const [totalServers, setTotalServers] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [installations, setInstallations] = useState<Installation[]>([]);
   const [loading, setLoading] = useState(true);
   const [category, setCategory] = useState("All");
@@ -151,20 +129,43 @@ export default function MarketplacePage() {
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const toggleAbortRef = useRef<Map<string, AbortController>>(new Map());
 
+  // Dynamic categories from catalog data
+  const categories = useMemo(() => {
+    const cats = new Set(catalog.map((s) => s.category));
+    const sorted = Array.from(cats).sort();
+    return ["All", ...sorted.map((c) => c.charAt(0).toUpperCase() + c.slice(1))];
+  }, [catalog]);
+
   // ── Data fetching ──
 
-  const fetchCatalog = () => {
-    const params: { category?: string; search?: string } = {};
+  const fetchCatalog = useCallback((append = false, offset = 0) => {
+    const params: { category?: string; search?: string; limit?: number; offset?: number } = {
+      limit: 50,
+      offset,
+    };
     if (category !== "All") params.category = category.toLowerCase();
     if (search.trim()) params.search = search.trim();
+
+    if (!append) setLoadingMore(false);
+    else setLoadingMore(true);
+
     api
       .getMarketplaceCatalog(params)
-      .then(setCatalog)
+      .then((res) => {
+        if (append) {
+          setCatalog((prev) => [...prev, ...res.servers]);
+        } else {
+          setCatalog(res.servers);
+        }
+        setTotalServers(res.total);
+        setHasMore(res.hasMore);
+      })
       .catch((err) => {
         console.error("Failed to fetch catalog:", err);
         toast.error("Failed to load MCP catalog");
-      });
-  };
+      })
+      .finally(() => setLoadingMore(false));
+  }, [category, search]);
 
   const fetchInstallations = () => {
     api
@@ -178,11 +179,13 @@ export default function MarketplacePage() {
 
   useEffect(() => {
     Promise.all([
-      api.getMarketplaceCatalog(),
+      api.getMarketplaceCatalog({ limit: 50, offset: 0 }),
       api.getMarketplaceInstallations(),
     ])
       .then(([c, i]) => {
-        setCatalog(c);
+        setCatalog(c.servers);
+        setTotalServers(c.total);
+        setHasMore(c.hasMore);
         setInstallations(i);
       })
       .catch((err) => {
@@ -197,12 +200,12 @@ export default function MarketplacePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [category, search]);
 
-  // ── Realtime sync (auto-update when IDE or other sessions change installations) ──
+  // ── Realtime sync ──
 
   const handleRealtimeUpdate = useCallback(() => {
     fetchCatalog();
     fetchInstallations();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fetchCatalog]);
 
   useMarketplaceRealtime(handleRealtimeUpdate);
 
@@ -217,10 +220,21 @@ export default function MarketplacePage() {
 
     setInstalling(item.slug);
     try {
-      await api.installMarketplaceItem(item.slug);
-      toast.success(
-        `${item.name} installed! Your IDE will sync automatically.`
-      );
+      // For registry servers, pass registryData so backend can auto-create catalog entry
+      const registryData = item.source === "registry" ? {
+        name: item.name,
+        description: item.description,
+        category: item.category,
+        serverType: item.serverType,
+        configTemplate: item.configTemplate ?? {},
+        configParams: item.configParams,
+        logoUrl: item.logoUrl,
+        author: item.author,
+        githubUrl: item.githubUrl,
+      } : undefined;
+
+      await api.installMarketplaceItem(item.slug, undefined, undefined, registryData);
+      toast.success(`${item.name} installed! Your IDE will sync automatically.`);
       fetchCatalog();
       fetchInstallations();
     } catch {
@@ -241,10 +255,20 @@ export default function MarketplacePage() {
 
     setInstalling(item.slug);
     try {
-      await api.installMarketplaceItem(item.slug, configValues);
-      toast.success(
-        `${item.name} installed! Your IDE will sync automatically.`
-      );
+      const registryData = item.source === "registry" ? {
+        name: item.name,
+        description: item.description,
+        category: item.category,
+        serverType: item.serverType,
+        configTemplate: item.configTemplate ?? {},
+        configParams: item.configParams,
+        logoUrl: item.logoUrl,
+        author: item.author,
+        githubUrl: item.githubUrl,
+      } : undefined;
+
+      await api.installMarketplaceItem(item.slug, configValues, undefined, registryData);
+      toast.success(`${item.name} installed! Your IDE will sync automatically.`);
       setConfiguringSlug(null);
       setConfigValues({});
       fetchCatalog();
@@ -257,14 +281,12 @@ export default function MarketplacePage() {
   };
 
   const handleToggle = async (inst: Installation) => {
-    // Abort any in-flight toggle for the same installation
     const prev = toggleAbortRef.current.get(inst.id);
     if (prev) prev.abort();
 
     const controller = new AbortController();
     toggleAbortRef.current.set(inst.id, controller);
 
-    // Optimistic UI update
     const newEnabled = !inst.enabled;
     setTogglingId(inst.id);
     setInstallations((p) =>
@@ -272,19 +294,15 @@ export default function MarketplacePage() {
     );
 
     try {
-      await api.updateMarketplaceInstallation(inst.id, {
-        enabled: newEnabled,
-      });
-      if (controller.signal.aborted) return; // Superseded by newer toggle
+      await api.updateMarketplaceInstallation(inst.id, { enabled: newEnabled });
+      if (controller.signal.aborted) return;
     } catch {
       if (controller.signal.aborted) return;
-      // Revert optimistic update on real failure
       setInstallations((p) =>
         p.map((i) => (i.id === inst.id ? { ...i, enabled: !newEnabled } : i))
       );
       toast.error("Failed to update");
     } finally {
-      // Only clear toggling state if this is still the active controller
       if (toggleAbortRef.current.get(inst.id) === controller) {
         toggleAbortRef.current.delete(inst.id);
         setTogglingId(null);
@@ -326,6 +344,11 @@ export default function MarketplacePage() {
             <h1 className="text-xl font-semibold tracking-tight">
               MCP Servers
             </h1>
+            {totalServers > 0 && (
+              <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground">
+                {totalServers} available
+              </span>
+            )}
             {installations.length > 0 && (
               <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground">
                 {installations.length} active
@@ -347,7 +370,7 @@ export default function MarketplacePage() {
         </a>
       </div>
 
-      {/* Tabs — underline style */}
+      {/* Tabs */}
       <div className="mb-6 flex gap-6 border-b border-border">
         <button
           onClick={() => setTab("browse")}
@@ -379,7 +402,7 @@ export default function MarketplacePage() {
       {/* ── Browse Tab ── */}
       {tab === "browse" && (
         <>
-          {/* Search + category filters */}
+          {/* Search */}
           <div className="mb-5 flex items-center gap-3">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -393,8 +416,9 @@ export default function MarketplacePage() {
             </div>
           </div>
 
-          <div className="mb-6 flex gap-1">
-            {CATEGORIES.map((cat) => (
+          {/* Dynamic categories */}
+          <div className="mb-6 flex flex-wrap gap-1">
+            {categories.map((cat) => (
               <button
                 key={cat}
                 onClick={() => setCategory(cat)}
@@ -418,160 +442,202 @@ export default function MarketplacePage() {
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              {catalog.map((item) => {
-                const installed = isInstalled(item.slug);
-                const isConfiguring = configuringSlug === item.slug;
-                const isInstallingThis = installing === item.slug;
+            <>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                {catalog.map((item) => {
+                  const installed = isInstalled(item.slug);
+                  const isConfiguring = configuringSlug === item.slug;
+                  const isInstallingThis = installing === item.slug;
 
-                return (
-                  <div
-                    key={item.id}
-                    className={`group rounded-lg border border-border p-4 transition-colors hover:bg-muted/30 ${
-                      isConfiguring ? "col-span-full" : ""
-                    }`}
-                  >
-                    {/* Card header */}
-                    <div className="mb-2.5 flex items-start justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-muted">
-                          <ServerIcon slug={item.slug} iconName={item.icon} className="h-4 w-4 text-foreground" />
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-1.5">
-                            <h3 className="text-[13px] font-semibold">
-                              {item.name}
-                            </h3>
-                            {item.verified && (
-                              <ShieldCheck className="h-3 w-3 text-muted-foreground" />
+                  return (
+                    <div
+                      key={item.id}
+                      className={`group rounded-lg border border-border p-4 transition-colors hover:bg-muted/30 ${
+                        isConfiguring ? "col-span-full" : ""
+                      }`}
+                    >
+                      {/* Card header */}
+                      <div className="mb-2.5 flex items-start justify-between">
+                        <div className="flex items-center gap-2.5">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-muted">
+                            <ServerIcon logoUrl={item.logoUrl} className="h-4 w-4 text-foreground" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <h3 className="text-[13px] font-semibold">
+                                {item.name}
+                              </h3>
+                              {item.featured && (
+                                <span className="rounded bg-amber-500/10 px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-amber-500">
+                                  Featured
+                                </span>
+                              )}
+                              {item.verified && (
+                                <ShieldCheck className="h-3 w-3 text-muted-foreground" />
+                              )}
+                            </div>
+                            {item.author && (
+                              <p className="text-[11px] text-muted-foreground">
+                                {item.author}
+                              </p>
                             )}
                           </div>
-                          {item.author && (
-                            <p className="text-[11px] text-muted-foreground">
-                              {item.author}
-                            </p>
-                          )}
                         </div>
+                        {installed ? (
+                          <span className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
+                            <Check className="h-3 w-3" />
+                            Installed
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => handleInstall(item)}
+                            disabled={isInstallingThis}
+                            className="flex items-center gap-1.5 rounded-md bg-foreground px-2.5 py-1 text-[11px] font-medium text-background transition-opacity hover:opacity-80 disabled:opacity-50"
+                          >
+                            {isInstallingThis ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <Download className="h-3 w-3" />
+                            )}
+                            Install
+                          </button>
+                        )}
                       </div>
-                      {installed ? (
-                        <span className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
-                          <Check className="h-3 w-3" />
-                          Installed
-                        </span>
-                      ) : (
-                        <button
-                          onClick={() => handleInstall(item)}
-                          disabled={isInstallingThis}
-                          className="flex items-center gap-1.5 rounded-md bg-foreground px-2.5 py-1 text-[11px] font-medium text-background transition-opacity hover:opacity-80 disabled:opacity-50"
+
+                      {/* Description */}
+                      <p className="mb-3 text-[12px] leading-relaxed text-muted-foreground line-clamp-2">
+                        {item.description}
+                      </p>
+
+                      {/* Meta row */}
+                      <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                        <span
+                          className={`rounded px-1.5 py-0.5 font-medium ${
+                            item.serverType === "remote"
+                              ? "bg-foreground/5 text-foreground-secondary"
+                              : "bg-muted text-muted-foreground"
+                          }`}
                         >
-                          {isInstallingThis ? (
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                          ) : (
-                            <Download className="h-3 w-3" />
-                          )}
-                          Install
-                        </button>
+                          {item.serverType === "remote" ? "Cloud" : "Local"}
+                        </span>
+                        {item.version && (
+                          <span className="text-muted-foreground">
+                            v{item.version}
+                          </span>
+                        )}
+                        {(item.githubStars ?? 0) > 0 && (
+                          <span className="flex items-center gap-0.5 tabular-nums">
+                            <Star className="h-2.5 w-2.5" />
+                            {formatCount(item.githubStars!)}
+                          </span>
+                        )}
+                        {item.githubUrl && (
+                          <a
+                            href={item.githubUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="transition-colors hover:text-foreground"
+                            title="View source"
+                          >
+                            <ExternalLink className="h-2.5 w-2.5" />
+                          </a>
+                        )}
+                        {item.installCount > 0 && (
+                          <span className="ml-auto flex items-center gap-1 tabular-nums">
+                            <Download className="h-2.5 w-2.5" />
+                            {formatCount(item.installCount)}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Config form (inline) */}
+                      {isConfiguring && !installed && (
+                        <div className="mt-4 border-t border-border pt-4">
+                          <p className="mb-3 text-[12px] font-medium">
+                            Configuration
+                          </p>
+                          <div className="space-y-2.5">
+                            {item.configParams.map((param) => (
+                              <div key={param.key}>
+                                <div className="mb-1 flex items-center gap-1.5">
+                                  <label className="text-[11px] text-muted-foreground">
+                                    {param.label}
+                                    {param.required && (
+                                      <span className="ml-0.5 text-foreground">
+                                        *
+                                      </span>
+                                    )}
+                                  </label>
+                                  {param.helpUrl && (
+                                    <a
+                                      href={param.helpUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground transition-colors hover:text-foreground"
+                                    >
+                                      Get token
+                                      <ExternalLink className="h-2.5 w-2.5" />
+                                    </a>
+                                  )}
+                                </div>
+                                <input
+                                  type={param.secret ? "password" : "text"}
+                                  value={configValues[param.key] ?? ""}
+                                  onChange={(e) =>
+                                    setConfigValues((prev) => ({
+                                      ...prev,
+                                      [param.key]: e.target.value,
+                                    }))
+                                  }
+                                  placeholder={param.placeholder}
+                                  className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-[13px] outline-none transition-colors focus:border-foreground/40"
+                                />
+                              </div>
+                            ))}
+                          </div>
+                          <div className="mt-3 flex items-center gap-2">
+                            <button
+                              onClick={() => handleConfiguredInstall(item)}
+                              disabled={isInstallingThis}
+                              className="rounded-md bg-foreground px-3 py-1.5 text-[12px] font-medium text-background transition-opacity hover:opacity-80 disabled:opacity-50"
+                            >
+                              {isInstallingThis
+                                ? "Installing..."
+                                : "Save & Install"}
+                            </button>
+                            <button
+                              onClick={() => {
+                                setConfiguringSlug(null);
+                                setConfigValues({});
+                              }}
+                              className="rounded-md px-3 py-1.5 text-[12px] text-muted-foreground transition-colors hover:text-foreground"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
                       )}
                     </div>
+                  );
+                })}
+              </div>
 
-                    {/* Description */}
-                    <p className="mb-3 text-[12px] leading-relaxed text-muted-foreground line-clamp-2">
-                      {item.description}
-                    </p>
-
-                    {/* Meta row */}
-                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                      <span
-                        className={`rounded px-1.5 py-0.5 font-medium ${
-                          item.serverType === "remote"
-                            ? "bg-foreground/5 text-foreground-secondary"
-                            : "bg-muted text-muted-foreground"
-                        }`}
-                      >
-                        {item.serverType === "remote" ? "Cloud" : "Local"}
-                      </span>
-                      {item.tags.slice(0, 2).map((tag) => (
-                        <span key={tag} className="text-muted-foreground">
-                          {tag}
-                        </span>
-                      ))}
-                      <span className="ml-auto flex items-center gap-1 tabular-nums">
-                        <Download className="h-2.5 w-2.5" />
-                        {formatInstallCount(item.installCount)}
-                      </span>
-                    </div>
-
-                    {/* Config form (inline) */}
-                    {isConfiguring && !installed && (
-                      <div className="mt-4 border-t border-border pt-4">
-                        <p className="mb-3 text-[12px] font-medium">
-                          Configuration
-                        </p>
-                        <div className="space-y-2.5">
-                          {item.configParams.map((param) => (
-                            <div key={param.key}>
-                              <div className="mb-1 flex items-center gap-1.5">
-                                <label className="text-[11px] text-muted-foreground">
-                                  {param.label}
-                                  {param.required && (
-                                    <span className="ml-0.5 text-foreground">
-                                      *
-                                    </span>
-                                  )}
-                                </label>
-                                {param.helpUrl && (
-                                  <a
-                                    href={param.helpUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground transition-colors hover:text-foreground"
-                                  >
-                                    Get token
-                                    <ExternalLink className="h-2.5 w-2.5" />
-                                  </a>
-                                )}
-                              </div>
-                              <input
-                                type={param.secret ? "password" : "text"}
-                                value={configValues[param.key] ?? ""}
-                                onChange={(e) =>
-                                  setConfigValues((prev) => ({
-                                    ...prev,
-                                    [param.key]: e.target.value,
-                                  }))
-                                }
-                                placeholder={param.placeholder}
-                                className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-[13px] outline-none transition-colors focus:border-foreground/40"
-                              />
-                            </div>
-                          ))}
-                        </div>
-                        <div className="mt-3 flex items-center gap-2">
-                          <button
-                            onClick={() => handleConfiguredInstall(item)}
-                            disabled={isInstallingThis}
-                            className="rounded-md bg-foreground px-3 py-1.5 text-[12px] font-medium text-background transition-opacity hover:opacity-80 disabled:opacity-50"
-                          >
-                            {isInstallingThis
-                              ? "Installing..."
-                              : "Save & Install"}
-                          </button>
-                          <button
-                            onClick={() => {
-                              setConfiguringSlug(null);
-                              setConfigValues({});
-                            }}
-                            className="rounded-md px-3 py-1.5 text-[12px] text-muted-foreground transition-colors hover:text-foreground"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+              {/* Load more */}
+              {hasMore && (
+                <div className="mt-6 flex justify-center">
+                  <button
+                    onClick={() => fetchCatalog(true, catalog.length)}
+                    disabled={loadingMore}
+                    className="flex items-center gap-2 rounded-md border border-border px-4 py-2 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+                  >
+                    {loadingMore ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : null}
+                    Load more servers
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </>
       )}
@@ -579,7 +645,6 @@ export default function MarketplacePage() {
       {/* ── Installed Tab ── */}
       {tab === "installed" && (
         <div>
-          {/* Sync info */}
           <div className="mb-5 flex items-center gap-2 text-[12px] text-muted-foreground">
             <Info className="h-3.5 w-3.5 shrink-0" />
             Changes sync to your Creor IDE automatically.
@@ -610,7 +675,7 @@ export default function MarketplacePage() {
                   >
                     <div className="flex items-center gap-3">
                       <div className="flex h-8 w-8 items-center justify-center rounded-md bg-muted">
-                        <ServerIcon slug={inst.catalog.slug} iconName={inst.catalog.icon} className="h-4 w-4 text-foreground" />
+                        <ServerIcon logoUrl={inst.catalog.logoUrl} className="h-4 w-4 text-foreground" />
                       </div>
                       <div>
                         <p className="text-[13px] font-medium">
@@ -624,7 +689,6 @@ export default function MarketplacePage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2.5">
-                      {/* Status indicator */}
                       <span
                         className={`text-[11px] font-medium ${
                           inst.enabled
@@ -635,7 +699,6 @@ export default function MarketplacePage() {
                         {inst.enabled ? "On" : "Off"}
                       </span>
 
-                      {/* Toggle */}
                       <button
                         onClick={() => handleToggle(inst)}
                         disabled={isToggling}
@@ -653,7 +716,6 @@ export default function MarketplacePage() {
                         />
                       </button>
 
-                      {/* Uninstall */}
                       <button
                         onClick={() => handleUninstall(inst)}
                         className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
