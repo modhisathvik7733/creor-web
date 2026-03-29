@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { useMarketplaceRealtime } from "@/hooks/use-marketplace-realtime";
@@ -73,6 +73,12 @@ interface Installation {
 
 // ── Icon mapping ──
 
+const LOGO_SLUGS = new Set([
+  "github", "slack", "notion", "supabase", "memory", "linear",
+  "postgres", "filesystem", "brave-search", "google-drive",
+  "sentry", "puppeteer", "sqlite", "exa", "todoist",
+]);
+
 const ICON_MAP: Record<string, LucideIcon> = {
   Github,
   MessageSquare,
@@ -91,6 +97,14 @@ const ICON_MAP: Record<string, LucideIcon> = {
 
 function getIcon(name: string | null): LucideIcon {
   return name ? ICON_MAP[name] ?? Package : Package;
+}
+
+function ServerIcon({ slug, iconName, className }: { slug: string; iconName: string | null; className?: string }) {
+  if (LOGO_SLUGS.has(slug)) {
+    return <img src={`/mcp-logos/${slug}.svg`} alt="" className={className} />;
+  }
+  const Icon = getIcon(iconName);
+  return <Icon className={className} />;
 }
 
 // ── Helpers ──
@@ -138,6 +152,7 @@ export default function MarketplacePage() {
   const [configValues, setConfigValues] = useState<Record<string, string>>({});
   const [installing, setInstalling] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const toggleAbortRef = useRef<Map<string, AbortController>>(new Map());
 
   // ── Data fetching ──
 
@@ -148,14 +163,20 @@ export default function MarketplacePage() {
     api
       .getMarketplaceCatalog(params)
       .then(setCatalog)
-      .catch(() => {});
+      .catch((err) => {
+        console.error("Failed to fetch catalog:", err);
+        toast.error("Failed to load MCP catalog");
+      });
   };
 
   const fetchInstallations = () => {
     api
       .getMarketplaceInstallations()
       .then(setInstallations)
-      .catch(() => {});
+      .catch((err) => {
+        console.error("Failed to fetch installations:", err);
+        toast.error("Failed to load installations");
+      });
   };
 
   useEffect(() => {
@@ -167,7 +188,10 @@ export default function MarketplacePage() {
         setCatalog(c);
         setInstallations(i);
       })
-      .catch(() => {})
+      .catch((err) => {
+        console.error("Initial marketplace load failed:", err);
+        toast.error("Failed to load marketplace data");
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -236,20 +260,38 @@ export default function MarketplacePage() {
   };
 
   const handleToggle = async (inst: Installation) => {
+    // Abort any in-flight toggle for the same installation
+    const prev = toggleAbortRef.current.get(inst.id);
+    if (prev) prev.abort();
+
+    const controller = new AbortController();
+    toggleAbortRef.current.set(inst.id, controller);
+
+    // Optimistic UI update
+    const newEnabled = !inst.enabled;
     setTogglingId(inst.id);
+    setInstallations((p) =>
+      p.map((i) => (i.id === inst.id ? { ...i, enabled: newEnabled } : i))
+    );
+
     try {
       await api.updateMarketplaceInstallation(inst.id, {
-        enabled: !inst.enabled,
+        enabled: newEnabled,
       });
-      setInstallations((prev) =>
-        prev.map((i) =>
-          i.id === inst.id ? { ...i, enabled: !i.enabled } : i
-        )
-      );
+      if (controller.signal.aborted) return; // Superseded by newer toggle
     } catch {
+      if (controller.signal.aborted) return;
+      // Revert optimistic update on real failure
+      setInstallations((p) =>
+        p.map((i) => (i.id === inst.id ? { ...i, enabled: !newEnabled } : i))
+      );
       toast.error("Failed to update");
     } finally {
-      setTogglingId(null);
+      // Only clear toggling state if this is still the active controller
+      if (toggleAbortRef.current.get(inst.id) === controller) {
+        toggleAbortRef.current.delete(inst.id);
+        setTogglingId(null);
+      }
     }
   };
 
@@ -381,7 +423,6 @@ export default function MarketplacePage() {
           ) : (
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               {catalog.map((item) => {
-                const Icon = getIcon(item.icon);
                 const installed = isInstalled(item.slug);
                 const isConfiguring = configuringSlug === item.slug;
                 const isInstallingThis = installing === item.slug;
@@ -397,7 +438,7 @@ export default function MarketplacePage() {
                     <div className="mb-2.5 flex items-start justify-between">
                       <div className="flex items-center gap-2.5">
                         <div className="flex h-8 w-8 items-center justify-center rounded-md bg-muted">
-                          <Icon className="h-3.5 w-3.5 text-foreground" />
+                          <ServerIcon slug={item.slug} iconName={item.icon} className="h-4 w-4 text-foreground" />
                         </div>
                         <div>
                           <div className="flex items-center gap-1.5">
@@ -563,7 +604,6 @@ export default function MarketplacePage() {
           ) : (
             <div className="divide-y divide-border rounded-lg border border-border">
               {installations.map((inst) => {
-                const Icon = getIcon(inst.catalog.icon);
                 const isToggling = togglingId === inst.id;
 
                 return (
@@ -573,7 +613,7 @@ export default function MarketplacePage() {
                   >
                     <div className="flex items-center gap-3">
                       <div className="flex h-8 w-8 items-center justify-center rounded-md bg-muted">
-                        <Icon className="h-3.5 w-3.5 text-foreground" />
+                        <ServerIcon slug={inst.catalog.slug} iconName={inst.catalog.icon} className="h-4 w-4 text-foreground" />
                       </div>
                       <div>
                         <p className="text-[13px] font-medium">
